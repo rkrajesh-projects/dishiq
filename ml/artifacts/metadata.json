@@ -1,0 +1,12 @@
+{
+  "model_name": "DishIQ Recipe TF-IDF Recommender",
+  "model_version": "1.0.0",
+  "algorithm": "TF-IDF + Cosine Similarity",
+  "feature_count": 377,
+  "dataset_version": "1.0.0",
+  "training_timestamp": "2026-09-01T14:55:43.451597+00:00",
+  "sklearn_version": "1.6.1",
+  "artifact_filename": "recipe_tfidf.joblib",
+  "total_recipes": 15,
+  "artifact_path": "D:\\DishIQ\\ml\\artifacts\\recipe_tfidf.joblib"
+}
