@@ -1,0 +1,9 @@
+{
+  "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+  "model_type": "SentenceTransformer",
+  "source": "HuggingFace Hub",
+  "embedding_dimension": 384,
+  "library_version": "2.2.2",
+  "download_status": "CACHED_LOCALLY",
+  "cache_location": "ml/models/pretrained"
+}

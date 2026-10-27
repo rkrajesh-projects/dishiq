@@ -16,6 +16,14 @@ class BaseGroceryProvider(abc.ABC):
         """
         pass
 
+    @property
+    def is_available(self) -> bool:
+        """
+        Return whether this provider is correctly configured and available for use.
+        Defaults to True unless overridden.
+        """
+        return True
+
     @abc.abstractmethod
     async def search_products(self, query: str) -> List[NormalizedGroceryProduct]:
         """

@@ -99,6 +99,9 @@ _UNICODE_FRACTIONS: Dict[str, float] = {
     "⅘": 0.8,
 }
 
+_MIXED_TEXT_FRAC_RE = re.compile(
+    r"(?P<whole>\d+)\s*[- ]\s*(?P<num>\d+)\s*/\s*(?P<den>\d+)"
+)
 _UNICODE_FRAC_RE = re.compile(
     r"(?P<whole>\d+)?\s*(?P<ufrac>[½⅓⅔¼¾⅛⅜⅝⅞⅙⅚⅕⅖⅗⅘])"
 )
@@ -202,12 +205,20 @@ def detect_optional(text: str) -> Tuple[bool, str]:
 
 def resolve_fractions(text: str) -> Tuple[Optional[float], str]:
     """Parse the first fraction expression near the start of the string."""
-    m = _UNICODE_FRAC_RE.search(text)
-    if m and m.start() < 15:
-        whole = int(m.group("whole")) if m.group("whole") else 0
-        frac = _UNICODE_FRACTIONS.get(m.group("ufrac"), 0.0)
+    m_mixed = _MIXED_TEXT_FRAC_RE.search(text)
+    if m_mixed and m_mixed.start() < 15:
+        whole = int(m_mixed.group("whole"))
+        num, den = int(m_mixed.group("num")), int(m_mixed.group("den"))
+        value = whole + (num / den if den != 0 else 0.0)
+        remainder = (text[: m_mixed.start()] + text[m_mixed.end() :]).strip()
+        return value, remainder
+
+    m_u = _UNICODE_FRAC_RE.search(text)
+    if m_u and m_u.start() < 15:
+        whole = int(m_u.group("whole")) if m_u.group("whole") else 0
+        frac = _UNICODE_FRACTIONS.get(m_u.group("ufrac"), 0.0)
         value = whole + frac
-        remainder = (text[: m.start()] + text[m.end() :]).strip()
+        remainder = (text[: m_u.start()] + text[m_u.end() :]).strip()
         return value, remainder
 
     m = _TEXT_FRAC_RE.search(text)
@@ -245,13 +256,23 @@ def extract_quantity(text: str) -> Tuple[Optional[float], str]:
 
 def extract_unit(text: str) -> Tuple[Optional[str], str]:
     """Match a unit token at the start of the remaining text."""
+    clean_t = text.strip()
     sorted_units = sorted(UNIT_NORMALIZATION.keys(), key=len, reverse=True)
     pattern = r"^(?P<unit>" + "|".join(re.escape(u) for u in sorted_units) + r")\b\.?"
-    m = re.match(pattern, text.strip(), re.IGNORECASE)
+    m = re.match(pattern, clean_t, re.IGNORECASE)
     if m:
         raw_unit = m.group("unit").lower().rstrip(".")
         canonical = UNIT_NORMALIZATION.get(raw_unit, raw_unit)
-        remainder = text[m.end() :].strip().lstrip(",").strip()
+        remainder = clean_t[m.end() :].strip().lstrip(",").strip()
+
+        # Strip leading "of " from remainder if present (e.g. "1 cup of flour" -> "flour")
+        remainder = re.sub(r"^(?:of\s+)", "", remainder, flags=re.IGNORECASE).strip()
+
+        # Guard: If remainder is completely empty and canonical is a dual noun (e.g. "clove", "head", "bunch"),
+        # do not treat as a unit because it represents the ingredient itself.
+        if not remainder and canonical in {"clove", "head", "bunch"}:
+            return None, text
+
         return canonical, remainder
     return None, text
 
@@ -274,17 +295,23 @@ def extract_preparation_note(text: str) -> Tuple[Optional[str], str]:
 
 
 # ---------------------------------------------------------------------------
-# Stage 8 – Ingredient name normalisation  (Phase 5.2 returns NormResult)
+# Stage 8 – Ingredient name normalisation
 # ---------------------------------------------------------------------------
 
 def normalize_ingredient(name: str) -> NormResult:
     """
-    Map a raw ingredient name to its canonical form.
-    Returns a NormResult with canonical_name, matched_alias, and source.
+    Map a raw ingredient name to its canonical form using exact,
+    plural, and word-boundary matching.
     """
     key = name.strip().lower()
+    if not key:
+        return NormResult(
+            canonical_name="",
+            matched_alias=None,
+            normalization_source=NORMALIZATION_SOURCE_UNKNOWN,
+        )
 
-    # Direct lookup
+    # 1. Direct exact lookup
     if key in INGREDIENT_NORMALIZATION:
         return NormResult(
             canonical_name=INGREDIENT_NORMALIZATION[key],
@@ -292,26 +319,40 @@ def normalize_ingredient(name: str) -> NormResult:
             normalization_source=NORMALIZATION_SOURCE_DICTIONARY,
         )
 
-    # Plurality strip ('s')
+    # 2. Plural / Singular resolution
     if key.endswith("s") and key[:-1] in INGREDIENT_NORMALIZATION:
         return NormResult(
             canonical_name=INGREDIENT_NORMALIZATION[key[:-1]],
             matched_alias=key[:-1],
             normalization_source=NORMALIZATION_SOURCE_DICTIONARY,
         )
+    if key.endswith("es") and key[:-2] in INGREDIENT_NORMALIZATION:
+        return NormResult(
+            canonical_name=INGREDIENT_NORMALIZATION[key[:-2]],
+            matched_alias=key[:-2],
+            normalization_source=NORMALIZATION_SOURCE_DICTIONARY,
+        )
+    if key.endswith("ies") and (key[:-3] + "y") in INGREDIENT_NORMALIZATION:
+        return NormResult(
+            canonical_name=INGREDIENT_NORMALIZATION[key[:-3] + "y"],
+            matched_alias=key[:-3] + "y",
+            normalization_source=NORMALIZATION_SOURCE_DICTIONARY,
+        )
 
-    # Partial / substring match (longest alias first for precision)
+    # 3. Word-boundary alias match (longest alias first for precision)
+    # Using \b to prevent partial-word overmatching (e.g. "eggplant" matching "egg", "boiled" matching "oil")
     for alias, canonical in sorted(
         INGREDIENT_NORMALIZATION.items(), key=lambda x: len(x[0]), reverse=True
     ):
-        if key.startswith(alias) or alias in key:
+        pattern = r"\b" + re.escape(alias) + r"\b"
+        if re.search(pattern, key):
             return NormResult(
                 canonical_name=canonical,
                 matched_alias=alias,
                 normalization_source=NORMALIZATION_SOURCE_DICTIONARY,
             )
 
-    # No match → return raw name as canonical
+    # No match → return cleaned name as canonical with 'unknown' source
     return NormResult(
         canonical_name=key,
         matched_alias=None,

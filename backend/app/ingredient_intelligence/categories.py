@@ -53,6 +53,7 @@ INGREDIENT_CATEGORIES: Dict[str, str] = {
     "cucumber": "vegetable",
     "ginger": "vegetable",
     "garlic": "vegetable",
+    "eggplant": "vegetable",
 
     # ── Herbs ───────────────────────────────────────────────────────────────
     "coriander": "herb",
@@ -66,10 +67,15 @@ INGREDIENT_CATEGORIES: Dict[str, str] = {
     "pasta": "grain",
     "tortilla": "grain",
     "rice batter": "grain",
+    "all-purpose flour": "grain",
+    "wheat flour": "grain",
+    "rice flour": "grain",
+    "cornstarch": "grain",
 
     # ── Legumes ─────────────────────────────────────────────────────────────
     "toor dal": "legume",
     "chana": "legume",
+    "besan": "legume",
 
     # ── Dairy ───────────────────────────────────────────────────────────────
     "paneer": "dairy",
@@ -77,6 +83,9 @@ INGREDIENT_CATEGORIES: Dict[str, str] = {
     "heavy cream": "dairy",
     "curd": "dairy",
     "feta cheese": "dairy",
+    "milk": "dairy",
+    "buttermilk": "dairy",
+    "almond milk": "dairy",
 
     # ── Meat ────────────────────────────────────────────────────────────────
     "chicken breast": "meat",
@@ -88,23 +97,34 @@ INGREDIENT_CATEGORIES: Dict[str, str] = {
     "turmeric powder": "spice",
     "garam masala": "spice",
     "cumin seeds": "spice",
+    "cumin powder": "spice",
     "mustard seeds": "spice",
     "red chili powder": "spice",
     "coriander powder": "spice",
+    "coriander seeds": "spice",
     "black pepper": "spice",
     "kesar": "spice",
+    "clove": "spice",
+    "ground clove": "spice",
+    "ginger powder": "spice",
 
-    # ── Seasoning ───────────────────────────────────────────────────────────
+    # ── Seasoning & Condiments ───────────────────────────────────────────────
     "salt": "seasoning",
     "soy sauce": "condiment",
+    "coconut milk": "beverage",
+    "soy milk": "beverage",
 
     # ── Oils ────────────────────────────────────────────────────────────────
     "oil": "oil",
     "olive oil": "oil",
     "cooking oil": "oil",
+    "mustard oil": "oil",
+    "coconut oil": "oil",
+    "sesame oil": "oil",
 
     # ── Nuts & Seeds ────────────────────────────────────────────────────────
     "cashews": "nut",
+    "peanut butter": "nut",
 }
 
 

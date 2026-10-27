@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class IngredientRead(BaseModel):
@@ -39,9 +39,29 @@ class RecipeRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class RecipeDetailRead(RecipeRead):
-    instructions: List[str]
-    source_url: Optional[str] = None
-    ingredients: List[RecipeIngredientRead]
+class RecipeStepRead(BaseModel):
+    step_number: int
+    text: str
+    action_type: str
+    timing_minutes: Optional[int] = None
+    temperature: Optional[str] = None
+    equipment: List[str] = []
+    ingredients: List[str] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RecipeDetailRead(RecipeRead):
+    instructions: List[str] = Field(validation_alias="legacy_instructions")
+    structured_instructions: Optional[List[RecipeStepRead]] = Field(None, validation_alias="structured_instructions_data")
+    source_url: Optional[str] = None
+    author: Optional[str] = None
+    source_license: Optional[str] = None
+    region: Optional[str] = None
+    state: Optional[str] = None
+    original_name: Optional[str] = None
+    is_indian_recipe: Optional[bool] = None
+    verification_status: Optional[str] = None
+    ingredients: List[RecipeIngredientRead]
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)

@@ -13,7 +13,7 @@ from typing import List, Dict, Optional, Tuple
 from itertools import combinations
 
 from app.core.config import settings
-from app.product_matching.unit_pricing import normalize_unit_and_quantity
+from app.product_matching.unit_pricing import normalize_unit_and_quantity, calculate_unit_price, convert_cross_dimension_quantity
 from app.product_matching.schemas import ProductMatchResult
 from app.schemas.cart import (
     CartIngredientRequest,
@@ -29,12 +29,14 @@ def calculate_packages_required(
     required_unit: Optional[str],
     package_qty: Optional[float],
     package_unit: Optional[str],
+    ingredient_name: Optional[str] = None,
 ) -> Optional[int]:
     """
     Calculate the number of packages needed to satisfy a required quantity.
 
-    Uses the existing unit_pricing.normalize_unit_and_quantity() for unit conversion
-    to avoid duplicating conversion logic.
+    Uses unit_pricing.normalize_unit_and_quantity() for base unit conversion,
+    and convert_cross_dimension_quantity() for physical heuristics (piece-weight, density)
+    when ingredient units and package units span different dimensions (e.g. pieces -> grams, tsp -> grams).
 
     Returns:
         Number of packages (>= 1), or None if units are incompatible or inputs invalid.
@@ -57,13 +59,25 @@ def calculate_packages_required(
     if pkg_base_qty is None or pkg_base_unit is None:
         return None
 
-    # Units must be compatible (same base unit category)
-    if req_base_unit != pkg_base_unit:
-        return None
+    # Fast path: identical base unit dimension (e.g. g <-> kg, ml <-> L, piece <-> pieces)
+    if req_base_unit == pkg_base_unit:
+        packages = math.ceil(req_base_qty / pkg_base_qty)
+        return max(1, packages)
 
-    # Calculate packages needed (ceiling division)
-    packages = math.ceil(req_base_qty / pkg_base_qty)
-    return max(1, packages)
+    # Cross-dimension conversion using ingredient physical heuristics
+    if ingredient_name:
+        converted_req_qty = convert_cross_dimension_quantity(
+            qty=req_base_qty,
+            from_base_unit=req_base_unit,
+            to_base_unit=pkg_base_unit,
+            ingredient_name=ingredient_name,
+            original_unit=required_unit,
+        )
+        if converted_req_qty is not None and converted_req_qty > 0:
+            packages = math.ceil(converted_req_qty / pkg_base_qty)
+            return max(1, packages)
+
+    return None
 
 
 def calculate_line_cost(
@@ -119,6 +133,10 @@ def _select_best_product_for_ingredient(
     scored_candidates: List[Tuple[ProductMatchResult, int, float]] = []
 
     for product in candidates:
+        # Never select products explicitly marked out of stock.
+        if not product.availability:
+            continue
+
         # Must have a valid price
         if product.price is None or product.price < 0:
             continue
@@ -129,6 +147,7 @@ def _select_best_product_for_ingredient(
             required_unit=ingredient.required_unit,
             package_qty=product.package_quantity,
             package_unit=product.package_unit,
+            ingredient_name=ingredient.ingredient_name,
         )
         if packages is None:
             continue
@@ -227,8 +246,8 @@ def build_store_baskets(
                 currency="INR",
                 match_score=product.similarity_score,
                 in_stock=True,
-                data_source_type="demo",
-                price_freshness="CACHED",
+                data_source_type=product.data_source_type or "demo",
+                price_freshness=product.price_freshness or "CACHED",
             ))
 
         delivery_fee = _get_delivery_fee_for_store([])
@@ -332,11 +351,14 @@ def strategy_cheapest_split_cart(
         # (overrides match-score priority for split cart cost optimization)
         all_scored: List[Tuple[ProductMatchResult, int, float]] = []
         for product in valid_matches:
+            if not product.availability:
+                continue
             if product.price is None or product.price < 0:
                 continue
             packages = calculate_packages_required(
                 ing.required_quantity, ing.required_unit,
                 product.package_quantity, product.package_unit,
+                ingredient_name=ing.ingredient_name,
             )
             if packages is None:
                 continue
@@ -408,8 +430,8 @@ def strategy_cheapest_split_cart(
             currency="INR",
             match_score=product.similarity_score,
             in_stock=True,
-            data_source_type="demo",
-            price_freshness="CACHED",
+            data_source_type=product.data_source_type or "demo",
+            price_freshness=product.price_freshness or "CACHED",
         ))
         bd.subtotal = round(bd.subtotal + line_cost, 2)
 
@@ -504,11 +526,14 @@ def _evaluate_store_combo(
 
         all_scored: List[Tuple[ProductMatchResult, int, float]] = []
         for product in valid:
+            if not product.availability:
+                continue
             if product.price is None or product.price < 0:
                 continue
             packages = calculate_packages_required(
                 ing.required_quantity, ing.required_unit,
                 product.package_quantity, product.package_unit,
+                ingredient_name=ing.ingredient_name,
             )
             if packages is None:
                 continue

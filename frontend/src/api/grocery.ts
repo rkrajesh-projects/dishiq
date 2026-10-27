@@ -47,11 +47,15 @@ export const matchGroceryProducts = async (params: MatchGroceryParams): Promise<
       comparison_mode: null,
     };
   }
+  const queryParams: Record<string, any> = {
+    ...params,
+    ingredient: trimmed,
+  };
+  if (params.live_mode !== undefined) {
+    queryParams.live_mode = params.live_mode;
+  }
   const response = await apiClient.get<MatchIngredientsResponse>('/grocery/match', {
-    params: {
-      ...params,
-      ingredient: trimmed,
-    },
+    params: queryParams,
   });
   return response.data;
 };
@@ -67,23 +71,29 @@ export const compareGroceryPrices = async (params: CompareGroceryParams): Promis
       results: [],
       best_option: null,
       comparison_mode: null,
-    };
+      price_freshness: 'CACHED',
+    } as unknown as GroceryCompareResponse;
   }
   const response = await apiClient.get<GroceryCompareResponse>('/grocery/compare', {
     params: {
       ...params,
       ingredient: trimmed,
+      live_mode: params.live_mode ?? false,
     },
   });
   return response.data;
 };
 
-export const compareCart = async (request: CartCompareRequest): Promise<CartCompareResponse> => {
-  const response = await apiClient.post<CartCompareResponse>('/cart/compare', request);
+export const compareCart = async (request: CartCompareRequest, liveMode: boolean = false): Promise<CartCompareResponse> => {
+  const response = await apiClient.post<CartCompareResponse>('/cart/compare', request, {
+    params: { live_mode: liveMode },
+  });
   return response.data;
 };
 
-export const optimizeCart = async (request: CartCompareRequest): Promise<CartOptimizeResponse> => {
-  const response = await apiClient.post<CartOptimizeResponse>('/cart/optimize', request);
+export const optimizeCart = async (request: CartCompareRequest, liveMode: boolean = false): Promise<CartOptimizeResponse> => {
+  const response = await apiClient.post<CartOptimizeResponse>('/cart/optimize', request, {
+    params: { live_mode: liveMode },
+  });
   return response.data;
 };

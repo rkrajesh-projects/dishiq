@@ -1,0 +1,27 @@
+{
+  "total_recipes": 2005,
+  "dataset_sources": {
+    "foodcom": 1011,
+    "archanas_kitchen": 994
+  },
+  "splits": {
+    "train_count": 1403,
+    "validation_count": 301,
+    "test_count": 301
+  },
+  "missing_values": {
+    "recipe_id": 0,
+    "recipe_name": 0,
+    "description": 0,
+    "ingredients": 0,
+    "instructions": 0,
+    "cuisine": 0,
+    "diet": 0,
+    "cooking_time": 0,
+    "rating": 0,
+    "dataset_source": 0,
+    "normalized_name": 0
+  },
+  "random_seed": 42,
+  "leakage_check_passed": true
+}

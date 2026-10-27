@@ -16,6 +16,18 @@ vi.mock('../api/ingredients', () => ({
   getRecipeIngredients: vi.fn(),
 }));
 
+vi.mock('../hooks/useCooking', () => ({
+  useStartCooking: vi.fn(),
+  useActiveCookingSession: vi.fn().mockReturnValue({ data: null, isLoading: false }),
+}));
+
+vi.mock('../hooks/usePantry', () => ({
+  usePantryItems: vi.fn().mockReturnValue({ data: [] }),
+}));
+
+import * as cookingHooks from '../hooks/useCooking';
+import * as pantryHooks from '../hooks/usePantry';
+
 const createTestQueryClient = () =>
   new QueryClient({
     defaultOptions: {
@@ -39,6 +51,19 @@ describe('CartOptimizationPanel Component', () => {
       isPending: false,
       isError: false,
       error: null,
+    });
+
+    (cookingHooks.useStartCooking as any).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    });
+    (cookingHooks.useActiveCookingSession as any).mockReturnValue({
+      data: null,
+      isLoading: false,
+    });
+    (pantryHooks.usePantryItems as any).mockReturnValue({
+      data: [],
+      isLoading: false,
     });
   });
 
@@ -184,6 +209,35 @@ describe('CartOptimizationPanel Component', () => {
       },
       alternatives: [],
       missing_ingredients: [],
+      store_baskets: [
+        {
+          store_id: 's1',
+          store_name: 'Demo QuickMart',
+          subtotal: 180.0,
+          delivery_fee: 30.0,
+          total: 210.0,
+          complete: true,
+          selected_products: [
+            {
+              ingredient_name: 'paneer',
+              product_id: 'p1',
+              product_name: 'Paneer 500g',
+              brand: 'Amul',
+              package_quantity: 500.0,
+              package_unit: 'g',
+              packages_required: 1,
+              package_price: 180.0,
+              line_cost: 180.0,
+              currency: 'INR',
+              match_score: 0.95,
+              in_stock: true,
+              data_source_type: 'demo',
+              price_freshness: 'CACHED',
+            },
+          ],
+          missing_ingredients: [],
+        },
+      ],
     };
 
     const optimizeMock = vi.fn();
@@ -204,7 +258,7 @@ describe('CartOptimizationPanel Component', () => {
     expect(screen.getByTestId('estimated-savings')).toHaveTextContent(/save ₹45/i);
     expect(screen.getByTestId('store-name')).toHaveTextContent('Demo QuickMart');
     expect(screen.getByTestId('product-name')).toHaveTextContent('Paneer 500g');
-    expect(screen.getByText(/Demonstration Notice:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Live Data Notice:/i)).toBeInTheDocument();
   });
 
   it('6. Displays missing/unfulfilled ingredients if reported', async () => {
@@ -268,5 +322,110 @@ describe('CartOptimizationPanel Component', () => {
     expect(await screen.findByTestId('missing-ingredients')).toBeInTheDocument();
     expect(screen.getByText('fresh curry leaves')).toBeInTheDocument();
     expect(screen.getByText('No compatible in-stock product found')).toBeInTheDocument();
+  });
+
+  it('7. Renders Start Cooking button below optimizer and navigates on click', async () => {
+    vi.spyOn(ingredientsApi, 'getRecipeIngredients').mockResolvedValue({
+      count: 1,
+      results: [
+        {
+          raw_text: 'Paneer 500g',
+          display_name: 'Paneer',
+          canonical_name: 'paneer',
+          category: 'dairy',
+          quantity: 500,
+          unit: 'g',
+          preparation_note: null,
+          optional: false,
+          to_taste: false,
+          confidence_score: 1.0,
+          matched_alias: 'paneer',
+          normalization_source: 'dictionary',
+          parser_version: '1.0',
+        },
+      ],
+    });
+
+    const mutateMock = vi.fn();
+    (cookingHooks.useStartCooking as any).mockReturnValue({
+      mutate: mutateMock,
+      isPending: false,
+    });
+
+    renderComponent('?recipeId=recipe-123');
+
+    const startBtn = await screen.findByTestId('optimizer-start-cooking-btn');
+    expect(startBtn).toBeInTheDocument();
+    expect(startBtn).toHaveTextContent('Start Cooking');
+
+    startBtn.click();
+    expect(mutateMock).toHaveBeenCalledTimes(1);
+    expect(mutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recipe_id: 'recipe-123' }),
+      expect.any(Object)
+    );
+  });
+
+  it('8. Renders Covered by Your Pantry banner and excludes stocked items', async () => {
+    vi.spyOn(ingredientsApi, 'getRecipeIngredients').mockResolvedValue({
+      count: 2,
+      results: [
+        {
+          raw_text: 'Paneer 500g',
+          display_name: 'Paneer',
+          canonical_name: 'paneer',
+          category: 'dairy',
+          quantity: 500,
+          unit: 'g',
+          preparation_note: null,
+          optional: false,
+          to_taste: false,
+          confidence_score: 1.0,
+          matched_alias: 'paneer',
+          normalization_source: 'dictionary',
+          parser_version: '1.0',
+        },
+        {
+          raw_text: 'Green chili 2 pcs',
+          display_name: 'Green Chili',
+          canonical_name: 'green chili',
+          category: 'vegetable',
+          quantity: 2,
+          unit: 'piece',
+          preparation_note: null,
+          optional: false,
+          to_taste: false,
+          confidence_score: 1.0,
+          matched_alias: 'green chili',
+          normalization_source: 'dictionary',
+          parser_version: '1.0',
+        },
+      ],
+    });
+
+    (pantryHooks.usePantryItems as any).mockReturnValue({
+      data: [
+        {
+          id: 'p1',
+          canonical_name: 'green chili',
+          ingredient_name: 'Green Chili',
+          quantity: 5,
+          unit: 'piece',
+        },
+      ],
+      isLoading: false,
+    });
+
+    renderComponent('?recipeId=recipe-123');
+
+    // Covered banner is displayed with Green Chili
+    const pantryBanner = await screen.findByTestId('covered-by-pantry-banner');
+    expect(pantryBanner).toBeInTheDocument();
+    expect(pantryBanner).toHaveTextContent(/Covered by Your Pantry \(1\)/);
+    expect(pantryBanner).toHaveTextContent(/Green Chili/);
+
+    // Toggle button exists
+    const toggleBtn = screen.getByTestId('toggle-deduct-pantry');
+    expect(toggleBtn).toBeInTheDocument();
   });
 });

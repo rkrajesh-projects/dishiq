@@ -13,10 +13,12 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe }) => {
       <div className="p-5 flex-1 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between gap-2 mb-3">
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
-              {recipe.cuisine}
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+            {recipe.cuisine && recipe.cuisine.toLowerCase() !== 'unknown' && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
+                {recipe.cuisine}
+              </span>
+            )}
+            <span className={`inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ${(!recipe.cuisine || recipe.cuisine.toLowerCase() === 'unknown') ? 'ml-auto' : ''}`}>
               <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
               {recipe.average_rating.toFixed(1)}
             </span>

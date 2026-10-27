@@ -1,0 +1,52 @@
+{
+  "model_name": "DishIQ Recipe Suitability \u2014 RandomForestRegressor",
+  "model_version": "1.0.0",
+  "algorithm": "RandomForestRegressor",
+  "purpose": "General recipe quality prediction using structural features",
+  "label_source": "Food.com rating distribution (proxy) + real DishIQ feedback",
+  "proxy_label_note": "Most ratings sampled from Food.com distribution (mean=4.57, std=0.96). Explicitly documented as proxy labels.",
+  "split_strategy": "70/15/15 train/val/test",
+  "random_seed": 42,
+  "n_estimators": 100,
+  "max_depth": 10,
+  "min_samples_leaf": 5,
+  "n_training_samples": 718,
+  "feature_names": [
+    "prep_time",
+    "cook_time",
+    "total_time",
+    "servings",
+    "ingredient_count",
+    "avg_rating",
+    "is_vegetarian",
+    "is_vegan",
+    "is_non_vegetarian",
+    "is_standard",
+    "cuisine_encoded"
+  ],
+  "validation_metrics": {
+    "MAE": 0.6187,
+    "RMSE": 0.749,
+    "R2": -0.1155
+  },
+  "test_metrics": {
+    "MAE": 0.5259,
+    "RMSE": 0.632,
+    "R2": -0.0305
+  },
+  "feature_importances": {
+    "prep_time": 0.0003141010447208724,
+    "cook_time": 0.26009201018343253,
+    "total_time": 0.2839141316441076,
+    "servings": 0.0,
+    "ingredient_count": 0.3869951014378817,
+    "avg_rating": 9.602500531763929e-05,
+    "is_vegetarian": 0.019364212909468187,
+    "is_vegan": 0.010163701923869273,
+    "is_non_vegetarian": 0.0,
+    "is_standard": 0.038812029835169064,
+    "cuisine_encoded": 0.00024868601603312727
+  },
+  "training_duration_seconds": 0.12,
+  "training_timestamp": "2026-09-19T16:12:53Z"
+}

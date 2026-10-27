@@ -1,20 +1,18 @@
-version: '3.8'
-
 services:
-  postgres:
+  db:
     image: postgres:15-alpine
-    container_name: dishiq_postgres
+    container_name: dishiq-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-dishiq_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dishiq_password}
-      POSTGRES_DB: ${POSTGRES_DB:-dishiq_db}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-dishiq}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} || pg_isready -U postgres"]
+      interval: 10s
       timeout: 5s
       retries: 5
 
@@ -22,54 +20,47 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: dishiq_backend
+    container_name: dishiq-backend
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
-      - APP_NAME=DishIQ
-      - APP_VERSION=1.0.0
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-dishiq}
       - ENVIRONMENT=production
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-dishiq_user}:${POSTGRES_PASSWORD:-dishiq_password}@postgres:5432/${POSTGRES_DB:-dishiq_db}
-      - LOG_LEVEL=INFO
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - API_V1_STR=/api/v1
+      - FRONTEND_URL=http://localhost:3000
+      - SECRET_KEY=${SECRET_KEY:-DishIQ_Super_Secret_Key_Change_In_Production}
+      # Add Swiggy MCP credentials here for production live pricing
+      - SWIGGY_INSTAMART_CLIENT_ID=${SWIGGY_INSTAMART_CLIENT_ID:-}
+      - SWIGGY_INSTAMART_CLIENT_SECRET=${SWIGGY_INSTAMART_CLIENT_SECRET:-}
+      - SWIGGY_INSTAMART_MCP_URL=${SWIGGY_INSTAMART_MCP_URL:-https://mcp.swiggy.com/im}
+      - SWIGGY_INSTAMART_LATITUDE=${SWIGGY_INSTAMART_LATITUDE:-}
+      - SWIGGY_INSTAMART_LONGITUDE=${SWIGGY_INSTAMART_LONGITUDE:-}
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
+    volumes:
+      # Mount ML artifacts to persist models across restarts
+      - ./ml/artifacts:/app/ml/artifacts
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/api/health'); sys.exit(0)"]
-      interval: 10s
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/api/v1/health || curl -f http://localhost:8001/api/health || exit 1"]
+      interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 45s
+      start_period: 20s
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: dishiq_frontend
+      args:
+        # Frontend talks to the backend on port 8001 (or via reverse proxy)
+        - VITE_API_BASE_URL=http://localhost:8001/api/v1
+    container_name: dishiq-frontend
     ports:
-      - "5173:80"
+      - "3000:80"
     depends_on:
       backend:
         condition: service_healthy
-
-  mcp-server:
-    build:
-      context: ./mcp-server
-      dockerfile: Dockerfile
-    container_name: dishiq_mcp_server
-    stdin_open: true
-    tty: true
-    environment:
-      - DISHIQ_BACKEND_URL=http://backend:8000/api
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "grep -qa python /proc/1/cmdline || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
 volumes:
   postgres_data:

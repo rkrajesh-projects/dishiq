@@ -11,7 +11,11 @@ class RecipeRepository:
     def get_by_id(self, recipe_id: str) -> Optional[Recipe]:
         return self.db.query(Recipe).filter(Recipe.id == recipe_id).first()
 
+    def get_by_exact_name(self, name: str) -> Optional[Recipe]:
+        return self.db.query(Recipe).filter(func.lower(Recipe.name) == name.lower()).first()
+
     def get_list(
+
         self,
         cuisine: Optional[str] = None,
         dietary_type: Optional[str] = None,
@@ -21,7 +25,11 @@ class RecipeRepository:
         query = self.db.query(Recipe)
         
         if cuisine:
-            query = query.filter(func.lower(Recipe.cuisine) == cuisine.lower())
+            clean_c = cuisine.strip().lower()
+            base_c = clean_c[:-8].strip() if clean_c.endswith(" recipes") else clean_c
+            query = query.filter(
+                func.lower(Recipe.cuisine).in_([clean_c, base_c, f"{base_c} recipes"])
+            )
         if dietary_type:
             query = query.filter(func.lower(Recipe.dietary_type) == dietary_type.lower())
 

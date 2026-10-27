@@ -1,58 +1,21 @@
 import os
 import time
-import joblib
-import numpy as np
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
-from sklearn.metrics.pairwise import cosine_similarity
 
 from app.models.recipe import Recipe
 from app.core.config import settings
 from app.core.recommendation_config import RecommendationSettings, recommendation_settings
 from app.core.logging import logger
-from ml.utils.feature_engineering import normalize_text
+from app.services.ml_service import MLService
 
 
 class RecommendationService:
-    _model_cache = None
-
     def __init__(self, db: Session, config: Optional[RecommendationSettings] = None):
         self.db = db
         self.config = config or recommendation_settings
-        self._ensure_model_loaded()
-
-    @classmethod
-    def _ensure_model_loaded(cls):
-        if cls._model_cache is not None:
-            return
-
-        artifact_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "ml", "artifacts", "recipe_tfidf.joblib")
-        )
-        
-        if os.path.exists(artifact_path):
-            try:
-                start_t = time.time()
-                cls._model_cache = joblib.load(artifact_path)
-                load_ms = round((time.time() - start_t) * 1000, 2)
-                
-                feature_count = cls._model_cache["tfidf_matrix"].shape[1]
-                recipe_count = len(cls._model_cache["recipe_ids"])
-
-                logger.info(
-                    f"ML Recommender Model loaded successfully ({recipe_count} recipes, {feature_count} features in {load_ms}ms)",
-                    extra={
-                        "artifact_path": artifact_path,
-                        "feature_count": feature_count,
-                        "recipe_count": recipe_count,
-                        "load_duration_ms": load_ms,
-                    }
-                )
-                return
-            except Exception as e:
-                logger.error(f"Failed to load ML model artifact from {artifact_path}: {e}")
-
-        cls._model_cache = None
+        # Trigger initialization of ml_service on startup
+        MLService.get_instance()
 
     def get_recommendations(
         self,
@@ -60,95 +23,140 @@ class RecommendationService:
         dietary_type: Optional[str] = None,
         max_time: Optional[int] = None,
         pantry_ingredients: Optional[List[str]] = None,
-        limit: int = 10,
+        limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         start_time = time.time()
+        ml_svc = MLService.get_instance()
 
-        query_recipes = self.db.query(Recipe).all()
-        candidate_count = len(query_recipes)
+        all_recipes = self.db.query(Recipe).all()
+        if not all_recipes:
+            return []
+            
+        # 1. Hard Filtering
+        valid_recipes = {}
+        for recipe in all_recipes:
+            if dietary_type and dietary_type.lower() != "none":
+                r_diet = recipe.dietary_type or ""
+                if r_diet.lower() != dietary_type.lower():
+                    continue
+                    
+            if max_time is not None:
+                total_time = (recipe.preparation_minutes or 0) + (recipe.cooking_minutes or 0)
+                if total_time > max_time:
+                    continue
+                    
+            valid_recipes[str(recipe.id)] = recipe
 
-        if candidate_count == 0:
+        if not valid_recipes:
             return []
 
-        pantry_set = {ing.lower().strip() for ing in (pantry_ingredients or []) if ing and ing.strip()}
-
         results = []
-
-        # Vector similarity scoring if model is cached
-        vectorizer = self._model_cache["vectorizer"] if self._model_cache else None
-        tfidf_matrix = self._model_cache["tfidf_matrix"] if self._model_cache else None
-        recipe_ids = self._model_cache["recipe_ids"] if self._model_cache else []
-
-        query_vector = None
-        if vectorizer and query and query.strip():
-            norm_q = normalize_text(query)
-            query_vector = vectorizer.transform([norm_q])
+        pantry_set = {ing.lower().strip() for ing in (pantry_ingredients or []) if ing and ing.strip()}
+        
+        # 2. ML Candidate Retrieval
+        ml_candidates = {}
+        if query and query.strip():
+            # Get an appropriately sized pool from hybrid recommender to rank relevant candidates
+            hybrid_results = ml_svc.hybrid_query(query.strip(), top_k=250)
+            for res in hybrid_results:
+                ml_candidates[str(res["recipe_id"])] = res
 
         cfg = self.config
 
-        for recipe in query_recipes:
-            explanations: List[str] = []
+        for rid, recipe in valid_recipes.items():
+            explanations = []
             score = cfg.base_score
+            
+            ml_stats = ml_candidates.get(rid, {})
+            
+            matches_text = False
+            if query and query.strip():
+                q = query.lower().strip()
+                name_match = q in (recipe.name or "").lower()
+                desc_match = q in (recipe.description or "").lower()
+                ing_match = any(
+                    q in ri.ingredient.canonical_name.lower()
+                    for ri in recipe.ingredients
+                    if ri.ingredient and ri.ingredient.canonical_name
+                )
+                matches_text = name_match or desc_match or ing_match
 
-            # 1. Dietary Filtering & Weight Boost
+            # If query provided but recipe wasn't ranked by ML and didn't match text/ingredients, skip it
+            if query and query.strip() and not ml_stats and not matches_text:
+                continue
+
             if dietary_type and dietary_type.lower() != "none":
-                if recipe.dietary_type.lower() != dietary_type.lower():
-                    continue
-                else:
-                    score += cfg.dietary_match_weight
-                    explanations.append(f"Matches your {recipe.dietary_type} preference")
+                score += cfg.dietary_match_weight
+                explanations.append(f"Matches your {recipe.dietary_type} preference")
 
-            # 2. Cooking Time Penalty / Compatibility
-            total_time = recipe.preparation_minutes + recipe.cooking_minutes
+            total_time = (recipe.preparation_minutes or 0) + (recipe.cooking_minutes or 0)
             if max_time is not None:
-                if total_time > max_time:
-                    continue
-                else:
-                    score += cfg.cooking_time_weight
-                    explanations.append(f"Ready within your {max_time} min time limit ({total_time} mins)")
+                score += cfg.cooking_time_weight
+                explanations.append(f"Ready within your {max_time} min time limit ({total_time} mins)")
             else:
                 explanations.append(f"Quick {total_time} min total time")
 
-            # 3. TF-IDF Text Similarity Score
-            if query_vector is not None and tfidf_matrix is not None and recipe.id in recipe_ids:
-                idx = recipe_ids.index(recipe.id)
-                text_sim = float(cosine_similarity(query_vector, tfidf_matrix[idx:idx+1])[0][0])
-                score += text_sim * cfg.cosine_similarity_weight
-                if text_sim > 0.3:
-                    explanations.append("High query relevance match")
-
-            # 4. Ingredient Overlap Boost
-            rec_ingredients = {ri.ingredient.canonical_name.lower() for ri in recipe.ingredients}
+            rec_ingredients = {ri.ingredient.canonical_name.lower() for ri in recipe.ingredients if ri.ingredient and ri.ingredient.canonical_name}
             matching_pantry = rec_ingredients.intersection(pantry_set)
             if matching_pantry:
                 match_count = len(matching_pantry)
                 score += match_count * cfg.ingredient_overlap_weight
                 explanations.append(f"{match_count} ingredient(s) already in your pantry")
 
-            # 5. Average Rating Boost
-            rating = recipe.average_rating or 4.5
-            score += (rating / 5.0) * cfg.rating_weight
-            explanations.append(f"Highly rated ({rating:.1f} ★)")
-
+            if ml_stats:
+                hybrid_score = ml_stats.get("final_score", 0.0)
+                tfidf_score = ml_stats.get("tfidf_score", 0.0)
+                semantic_score = ml_stats.get("semantic_score", 0.0)
+                rf_suitability = ml_stats.get("suitability_score", 0.0)
+                cluster_id = ml_stats.get("cluster_id", -1)
+                
+                # Big boost based on ML retrieval relevance
+                score += (hybrid_score * cfg.cosine_similarity_weight * 10)
+                
+                if semantic_score > 0.4:
+                    explanations.append("High semantic ML relevance")
+                elif tfidf_score > 0.3:
+                    explanations.append("High text relevance")
+                    
+                if rf_suitability >= 4.0:
+                    explanations.append(f"High generic recipe suitability ({rf_suitability:.1f}/5)")
+            else:
+                # No ML stats, rely on DB ratings and text match boost
+                rating = recipe.average_rating or 4.5
+                score += (rating / 5.0) * cfg.rating_weight
+                explanations.append(f"Highly rated ({rating:.1f} ★)")
+                
+                if query and query.strip() and matches_text:
+                    score += cfg.cosine_similarity_weight * 5.0
+                    explanations.append(f"Matches search query '{query.strip()}'")
+                
+                rf_suitability = rating
+                tfidf_score = 0.5 if matches_text else 0.0
+                semantic_score = 0.5 if matches_text else 0.0
+                hybrid_score = 0.5 if matches_text else 0.0
+                cluster_id = -1
+                
             results.append({
                 "recipe": recipe,
                 "score": round(score, 3),
                 "explanations": list(dict.fromkeys(explanations)),
+                "tfidf_score": round(tfidf_score, 3),
+                "semantic_score": round(semantic_score, 3),
+                "suitability_score": round(rf_suitability, 3),
+                "cluster_id": cluster_id,
+                "hybrid_score": round(hybrid_score, 3)
             })
 
         results.sort(key=lambda x: x["score"], reverse=True)
-        final_recommendations = results[:limit]
+        final_recommendations = results[:limit] if limit is not None else results
 
         duration_ms = round((time.time() - start_time) * 1000, 2)
         logger.info(
-            f"Recommendation query completed: evaluated {candidate_count} recipes, returned {len(final_recommendations)} results in {duration_ms}ms",
+            f"Recommendation query completed: returned {len(final_recommendations)} results in {duration_ms}ms",
             extra={
                 "search_query": query,
-                "dietary_type": dietary_type,
-                "max_time": max_time,
-                "candidates_evaluated": candidate_count,
+                "candidates_evaluated": len(all_recipes),
                 "recommendations_returned": len(final_recommendations),
-                "duration_ms": duration_ms,
             }
         )
 

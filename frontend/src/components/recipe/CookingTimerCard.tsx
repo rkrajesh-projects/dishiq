@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Timer, Play, Pause, RotateCcw, Plus, Trash2 } from 'lucide-react';
+import { Timer, Play, Pause, RotateCcw, Plus, Trash2, X, Bell, BellOff } from 'lucide-react';
 import { Button } from '../common/Button';
 import { useCookingTimer, CookingTimer } from '../../hooks/useCookingTimer';
 
@@ -232,6 +232,8 @@ export const CookingTimerCard: React.FC<CookingTimerCardProps> = ({
                   ? 'text-red-600 animate-bounce'
                   : timer.status === 'paused'
                   ? 'text-gray-400'
+                  : timer.status === 'cancelled'
+                  ? 'text-gray-300'
                   : 'text-gray-900'
               }`}
               aria-live="off"
@@ -243,7 +245,27 @@ export const CookingTimerCard: React.FC<CookingTimerCardProps> = ({
                 ✓ Timer Complete
               </span>
             )}
+            {timer.status === 'cancelled' && (
+              <span className="text-xs text-gray-500 font-semibold mt-1 block">
+                Timer Cancelled
+              </span>
+            )}
           </div>
+
+          {/* Desktop Alert Permission Prompt */}
+          {timer.notificationPermission === 'default' && (
+            <div className="flex justify-center pt-1">
+              <button
+                type="button"
+                onClick={timer.requestNotificationPermission}
+                className="text-[11px] text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 px-3 py-1 rounded-full flex items-center gap-1.5 transition-colors"
+                title="Enable sound and browser notifications when timers complete"
+              >
+                <Bell className="w-3 h-3 text-emerald-600" />
+                <span>Enable Alerts</span>
+              </button>
+            </div>
+          )}
 
           {/* Controls based on status state machine */}
           <div className="flex items-center justify-center gap-3 pt-2">
@@ -276,6 +298,15 @@ export const CookingTimerCard: React.FC<CookingTimerCardProps> = ({
                 >
                   Reset
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={<X className="w-3.5 h-3.5 text-red-500" />}
+                  onClick={() => timer.cancel()}
+                  title="Cancel timer"
+                >
+                  Cancel
+                </Button>
               </>
             )}
 
@@ -297,6 +328,15 @@ export const CookingTimerCard: React.FC<CookingTimerCardProps> = ({
                 >
                   Reset
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={<X className="w-3.5 h-3.5 text-red-500" />}
+                  onClick={() => timer.cancel()}
+                  title="Cancel timer"
+                >
+                  Cancel
+                </Button>
               </>
             )}
 
@@ -309,6 +349,28 @@ export const CookingTimerCard: React.FC<CookingTimerCardProps> = ({
                   onClick={() => timer.start(timer.durationSeconds)}
                 >
                   Start Again
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<X className="w-3.5 h-3.5" />}
+                  onClick={() => timer.reset()}
+                  title="Dismiss alert"
+                >
+                  Dismiss
+                </Button>
+              </>
+            )}
+
+            {timer.status === 'cancelled' && (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<Play className="w-3.5 h-3.5 fill-current" />}
+                  onClick={() => timer.start(timer.durationSeconds)}
+                >
+                  Restart
                 </Button>
                 <Button
                   variant="outline"

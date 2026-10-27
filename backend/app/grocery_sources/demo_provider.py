@@ -22,20 +22,61 @@ class DemoGroceryProvider(BaseGroceryProvider):
 
     async def search_products(self, query: str) -> List[NormalizedGroceryProduct]:
         """Search demo products matching the query."""
-        artifact_data = load_product_embeddings_artifact()
+        query_lower = (query or "").lower().strip()
+        
+        # Optimize by getting only matching products from the database instead of the entire catalog
         db_products = self.repo.get_all_products()
-
+        filtered_db_products = []
+        for p in db_products:
+            if not query_lower or query_lower in (p.name or "").lower() or query_lower in (p.normalized_name or "").lower():
+                filtered_db_products.append(p)
+                
+        artifact_data = load_product_embeddings_artifact()
         products = []
         encoder = None
 
-        for p in db_products:
+        for p in filtered_db_products:
             # Check if this product is cached in the artifact
             cached_p = None
             if artifact_data and "products" in artifact_data:
                 cached_p = artifact_data["products"].get(str(p.id))
 
             if cached_p:
-                products.append(cached_p)
+                # Preserve cached embeddings, but fill missing fields from the database.
+                merged_p = dict(cached_p)
+
+                if not merged_p.get("product_id"):
+                    merged_p["product_id"] = str(p.id)
+
+                if not merged_p.get("product_name"):
+                    merged_p["product_name"] = p.name
+
+                if not merged_p.get("name"):
+                    merged_p["name"] = p.name
+
+                if not merged_p.get("brand"):
+                    merged_p["brand"] = p.brand
+
+                if not merged_p.get("category"):
+                    merged_p["category"] = p.category
+
+                if not merged_p.get("store_id"):
+                    merged_p["store_id"] = str(p.store_id) if p.store_id else None
+
+                if not merged_p.get("store_name") and p.store:
+                    merged_p["store_name"] = p.store.name
+
+                if merged_p.get("price") is None:
+                    merged_p["price"] = p.latest_price
+
+                if not merged_p.get("package_quantity"):
+                    merged_p["package_quantity"] = p.package_quantity
+
+                if not merged_p.get("package_unit"):
+                    merged_p["package_unit"] = p.package_unit
+
+                products.append(merged_p)
+
             else:
                 # Not cached -> convert database product to dict representation
                 p_dict = {
@@ -46,7 +87,7 @@ class DemoGroceryProvider(BaseGroceryProvider):
                     "category": p.category,
                     "store_id": p.store_id,
                     "store_name": p.store.name if p.store else None,
-                    "price": p.prices[0].price if p.prices else None,
+                    "price": p.latest_price,
                     "package_quantity": p.package_quantity,
                     "package_unit": p.package_unit,
                     "normalized_name": p.normalized_name,
@@ -63,15 +104,9 @@ class DemoGroceryProvider(BaseGroceryProvider):
                 products.append(p_dict)
 
         normalized_list: List[NormalizedGroceryProduct] = []
-        query_lower = (query or "").lower().strip()
 
         for p in products:
-            p_name = p.get("name") or p.get("product_name") or ""
-            p_norm = p.get("normalized_name") or ""
-            
-            # Substring match on product name or normalized name
-            if not query_lower or query_lower in p_name.lower() or query_lower in p_norm.lower():
-                normalized_list.append(self._normalize_product(p))
+            normalized_list.append(self._normalize_product(p))
 
         return normalized_list
 
@@ -97,6 +132,7 @@ class DemoGroceryProvider(BaseGroceryProvider):
         """Helper to convert a DB GroceryProduct model or cache dict to NormalizedGroceryProduct."""
         if isinstance(p, dict):
             p_id = str(p.get("product_id") or p.get("id") or "")
+            store_id = p.get("store_id")
             p_name = str(p.get("product_name") or p.get("name") or "")
             brand = p.get("brand") or "Generic"
             category = p.get("category") or "Uncategorized"
@@ -108,11 +144,12 @@ class DemoGroceryProvider(BaseGroceryProvider):
             p_vec = p.get("embedding")
         else:
             p_id = str(p.id)
+            store_id = str(p.store_id) if p.store_id else None
             p_name = str(p.name)
             brand = p.brand or "Generic"
             category = p.category or "Uncategorized"
             store_name = p.store.name if p.store else "Demo Store"
-            price_val = p.prices[0].price if p.prices else None
+            price_val = p.latest_price
             pkg_qty = p.package_quantity
             pkg_unit = p.package_unit or "pack"
             observed_at = p.prices[0].observed_at if p.prices else datetime.now(timezone.utc)
@@ -121,6 +158,7 @@ class DemoGroceryProvider(BaseGroceryProvider):
         normalized = NormalizedGroceryProduct(
             source_platform="demo",
             source_product_id=p_id,
+            store_id=store_id,
             store_name=store_name,
             product_name=p_name,
             brand=brand,
@@ -132,7 +170,7 @@ class DemoGroceryProvider(BaseGroceryProvider):
             availability=True,
             product_url=None,
             retrieved_at=observed_at,
-            price_freshness="CACHED", # Seed data is classified as CACHED
+            price_freshness="DEMO", # Seed data is classified as DEMO
         )
         
         # Preserve semantic embedding in extra field if present

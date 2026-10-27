@@ -14,6 +14,10 @@ vi.mock('../hooks/useCooking', () => ({
   useNextStep: vi.fn(),
   usePreviousStep: vi.fn(),
   useCompleteSession: vi.fn(),
+  usePauseSession: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
+  useResumeSession: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
+  usePreparationChecklist: vi.fn().mockReturnValue({ data: undefined, isLoading: false }),
+  useUpdatePreparedIngredients: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock('../api/recipes', () => ({

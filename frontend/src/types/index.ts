@@ -39,9 +39,27 @@ export interface RecipeIngredientRead {
   preparation_note: string | null;
 }
 
+export interface RecipeStepRead {
+  step_number: number;
+  text: string;
+  action_type: string;
+  timing_minutes?: number | null;
+  temperature?: string | null;
+  equipment?: string[];
+  ingredients?: string[];
+}
+
 export interface RecipeDetail extends Recipe {
   instructions: string[];
+  structured_instructions?: RecipeStepRead[] | null;
   source_url?: string | null;
+  author?: string | null;
+  source_license?: string | null;
+  region?: string | null;
+  state?: string | null;
+  original_name?: string | null;
+  is_indian_recipe?: boolean | null;
+  verification_status?: string | null;
   ingredients: RecipeIngredientRead[];
 }
 

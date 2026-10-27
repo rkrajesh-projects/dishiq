@@ -15,6 +15,7 @@ export const GroceryMatchList: React.FC<GroceryMatchListProps> = ({
   ingredient,
   limit = 10,
   threshold,
+  live_mode = false,
   className = '',
   title,
 }) => {
@@ -22,6 +23,7 @@ export const GroceryMatchList: React.FC<GroceryMatchListProps> = ({
     ingredient,
     limit,
     threshold,
+    live_mode,
   });
 
   const {
@@ -124,14 +126,25 @@ export const GroceryMatchList: React.FC<GroceryMatchListProps> = ({
   return (
     <div className={`space-y-4 ${className}`} data-testid="grocery-match-list">
       {/* Header Summary */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
           <ShoppingBag className="w-4 h-4 text-emerald-600" />
           {title || `Matched Grocery Products (${data.total_matches})`}
         </h3>
-        <span className="text-xs text-gray-500 font-medium">
-          Query: &quot;{data.canonical_name || data.ingredient_text}&quot;
-        </span>
+        <div className="flex items-center gap-2">
+          {data.data_source === 'live' || data.price_freshness === 'PROVIDER_LIVE' ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Store Data
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+              Demo Data
+            </span>
+          )}
+          <span className="text-xs text-gray-500 font-medium">
+            Query: &quot;{data.canonical_name || data.ingredient_text}&quot;
+          </span>
+        </div>
       </div>
 
       {/* Filter & Sort Bar */}

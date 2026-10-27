@@ -10,6 +10,7 @@ export interface CartIngredientRequest {
 }
 
 export interface CartCompareRequest {
+  budget_cap?: number;
   ingredients: CartIngredientRequest[];
 }
 
@@ -24,6 +25,8 @@ export interface CartProductSelection {
   package_unit: string | null;
   packages_required: number;
   package_price: number | null;
+  unit_price?: number | null;
+  unit_price_label?: string | null;
   line_cost: number;
   currency: string;
   match_score: number;
@@ -69,6 +72,7 @@ export interface CartOptimizeResponse {
   recommended_strategy: string;
   recommended_cart: CartStrategyResult;
   alternatives: CartStrategyResult[];
+  store_baskets: CartStoreBreakdown[];
   total_cost: number;
   currency: string;
   estimated_savings: number;

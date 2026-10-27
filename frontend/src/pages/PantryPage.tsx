@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Package,
   Plus,
@@ -8,6 +8,8 @@ import {
   AlertCircle,
   Loader2,
   X,
+  Search,
+  MapPin,
 } from 'lucide-react';
 import { PageContainer } from '../components/common/PageContainer';
 import { SectionTitle } from '../components/common/SectionTitle';
@@ -46,6 +48,7 @@ function expiryBadgeClass(expirationDate: string | null): string {
 }
 
 const COMMON_UNITS = ['grams', 'kg', 'pieces', 'litres', 'ml', 'cups', 'tbsp', 'tsp', 'packets'];
+const STORAGE_LOCATIONS = ['All', 'Fridge', 'Freezer', 'Pantry Shelf', 'Spice Cabinet', 'Counter'];
 
 // ---------------------------------------------------------------------------
 // Add / Edit Modal
@@ -60,6 +63,8 @@ interface AddEditModalProps {
     quantity: number;
     unit: string;
     expiration_date?: string | null;
+    location?: string | null;
+    notes?: string | null;
   }) => void;
   isLoading: boolean;
   error: string | null;
@@ -77,6 +82,8 @@ const AddEditModal: React.FC<AddEditModalProps> = ({
   const [qty, setQty] = useState(String(initial?.quantity ?? ''));
   const [unit, setUnit] = useState(initial?.unit ?? 'pieces');
   const [expiry, setExpiry] = useState(initial?.expiration_date ?? '');
+  const [location, setLocation] = useState(initial?.location ?? '');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -102,6 +109,8 @@ const AddEditModal: React.FC<AddEditModalProps> = ({
       quantity: parsedQty,
       unit: unit.trim(),
       expiration_date: expiry || null,
+      location: location.trim() || null,
+      notes: notes.trim() || null,
     });
   };
 
@@ -114,7 +123,7 @@ const AddEditModal: React.FC<AddEditModalProps> = ({
       aria-modal="true"
       aria-label={mode === 'add' ? 'Add pantry item' : 'Edit pantry item'}
     >
-      <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-md">
+      <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-bold text-gray-900 text-lg">
             {mode === 'add' ? 'Add Pantry Item' : `Edit — ${initial?.ingredient_name}`}
@@ -181,15 +190,45 @@ const AddEditModal: React.FC<AddEditModalProps> = ({
             </div>
           </div>
 
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="pantry-expiry">
+                Expiry Date <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                id="pantry-expiry"
+                type="date"
+                value={expiry ?? ''}
+                onChange={(e) => setExpiry(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="flex-1">
+              <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="pantry-location">
+                Storage Location <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                id="pantry-location"
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Fridge, Shelf"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="pantry-expiry">
-              Expiry Date <span className="text-gray-400 font-normal">(optional)</span>
+            <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="pantry-notes">
+              Notes <span className="text-gray-400 font-normal">(optional)</span>
             </label>
             <input
-              id="pantry-expiry"
-              type="date"
-              value={expiry ?? ''}
-              onChange={(e) => setExpiry(e.target.value)}
+              id="pantry-notes"
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Organic, opened 2 days ago"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
             />
           </div>
@@ -290,12 +329,31 @@ export const PantryPage: React.FC = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [editItem, setEditItem] = useState<PantryItem | null>(null);
   const [deleteItem, setDeleteItem] = useState<PantryItem | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState('All');
+
+  const filteredItems = useMemo(() => {
+    return pantryItems.filter((item) => {
+      const matchesSearch =
+        searchQuery.trim() === '' ||
+        item.ingredient_name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+        (item.canonical_name && item.canonical_name.toLowerCase().includes(searchQuery.toLowerCase().trim()));
+
+      const matchesLocation =
+        selectedLocation === 'All' ||
+        (item.location && item.location.toLowerCase() === selectedLocation.toLowerCase());
+
+      return matchesSearch && matchesLocation;
+    });
+  }, [pantryItems, searchQuery, selectedLocation]);
 
   const handleAdd = (data: {
     ingredient_name?: string;
     quantity: number;
     unit: string;
     expiration_date?: string | null;
+    location?: string | null;
+    notes?: string | null;
   }) => {
     addMutation.mutate(
       {
@@ -303,6 +361,8 @@ export const PantryPage: React.FC = () => {
         quantity: data.quantity,
         unit: data.unit,
         expiration_date: data.expiration_date,
+        location: data.location,
+        notes: data.notes,
       },
       {
         onSuccess: () => setShowAdd(false),
@@ -315,6 +375,8 @@ export const PantryPage: React.FC = () => {
     quantity: number;
     unit: string;
     expiration_date?: string | null;
+    location?: string | null;
+    notes?: string | null;
   }) => {
     if (!editItem) return;
     updateMutation.mutate(
@@ -324,6 +386,8 @@ export const PantryPage: React.FC = () => {
           quantity: data.quantity,
           unit: data.unit,
           expiration_date: data.expiration_date,
+          location: data.location,
+          notes: data.notes,
         },
       },
       {
@@ -373,13 +437,45 @@ export const PantryPage: React.FC = () => {
         </div>
         <div className="text-right">
           <span className="text-xs text-emerald-200 block mb-1 flex items-center justify-end gap-1">
-            <IndianRupee className="w-3.5 h-3.5" /> Total Quantity Units
+            <IndianRupee className="w-3.5 h-3.5" /> Total Items
           </span>
           <span className="text-2xl font-black text-amber-300">
             {isLoading ? '—' : pantryItems.length}
           </span>
         </div>
       </div>
+
+      {/* ── Search & Filter Controls ── */}
+      {pantryItems.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-6 shadow-sm flex flex-col sm:flex-row items-center gap-3">
+          <div className="relative flex-1 w-full">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search pantry items..."
+              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+              aria-label="Search pantry items"
+            />
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <select
+              value={selectedLocation}
+              onChange={(e) => setSelectedLocation(e.target.value)}
+              className="w-full sm:w-auto text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              aria-label="Filter by storage location"
+            >
+              {STORAGE_LOCATIONS.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc === 'All' ? 'All Locations' : loc}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       {/* ── Body ── */}
       <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm min-h-[200px]">
@@ -412,10 +508,19 @@ export const PantryPage: React.FC = () => {
           </div>
         )}
 
+        {/* No Filter Results */}
+        {!isLoading && !isError && pantryItems.length > 0 && filteredItems.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-400">
+            <Search className="w-8 h-8 text-gray-300" />
+            <p className="text-sm font-medium text-gray-600">No matching pantry items</p>
+            <p className="text-xs text-gray-400">Try adjusting your search query or location filter.</p>
+          </div>
+        )}
+
         {/* Items grid */}
-        {!isLoading && !isError && pantryItems.length > 0 && (
+        {!isLoading && !isError && filteredItems.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pantryItems.map((item) => (
+            {filteredItems.map((item) => (
               <div
                 key={item.id}
                 className="p-4 rounded-2xl border border-orange-100 bg-orange-50/30 flex items-start justify-between gap-2 group"
@@ -431,11 +536,23 @@ export const PantryPage: React.FC = () => {
                     <p className="text-xs text-gray-500">
                       {item.quantity} {item.unit}
                     </p>
-                    <span
-                      className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${expiryBadgeClass(item.expiration_date)}`}
-                    >
-                      {formatExpiry(item.expiration_date)}
-                    </span>
+                    <div className="flex flex-wrap gap-1 mt-1.5 items-center">
+                      <span
+                        className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-medium ${expiryBadgeClass(item.expiration_date)}`}
+                      >
+                        {formatExpiry(item.expiration_date)}
+                      </span>
+                      {item.location && (
+                        <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700">
+                          {item.location}
+                        </span>
+                      )}
+                    </div>
+                    {item.notes && (
+                      <p className="text-[10px] text-gray-500 italic mt-1 truncate" title={item.notes}>
+                        {item.notes}
+                      </p>
+                    )}
                   </div>
                 </div>
 

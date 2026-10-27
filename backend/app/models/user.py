@@ -27,6 +27,9 @@ class User(Base):
     pantry_items: Mapped[list["PantryItem"]] = relationship("PantryItem", back_populates="user", cascade="all, delete-orphan")
     feedbacks: Mapped[list["RecipeFeedback"]] = relationship("RecipeFeedback", back_populates="user", cascade="all, delete-orphan")
     cooking_sessions: Mapped[list["CookingSession"]] = relationship("CookingSession", back_populates="user", cascade="all, delete-orphan")
+    cooking_timers: Mapped[list["CookingTimer"]] = relationship("CookingTimer", back_populates="user", cascade="all, delete-orphan")
+    meal_plans: Mapped[list["MealPlan"]] = relationship("MealPlan", back_populates="user", cascade="all, delete-orphan")
+    shopping_lists: Mapped[list["ShoppingList"]] = relationship("ShoppingList", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserPreference(Base):

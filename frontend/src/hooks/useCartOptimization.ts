@@ -6,14 +6,14 @@ import { useMutation } from '@tanstack/react-query';
 import { compareCart, optimizeCart } from '../api/grocery';
 import { CartCompareRequest, CartCompareResponse, CartOptimizeResponse } from '../types';
 
-export const useCartCompare = () => {
+export const useCartCompare = (liveMode: boolean = false) => {
   return useMutation<CartCompareResponse, Error, CartCompareRequest>({
-    mutationFn: compareCart,
+    mutationFn: (request) => compareCart(request, liveMode),
   });
 };
 
-export const useCartOptimize = () => {
+export const useCartOptimize = (liveMode: boolean = false) => {
   return useMutation<CartOptimizeResponse, Error, CartCompareRequest>({
-    mutationFn: optimizeCart,
+    mutationFn: (request) => optimizeCart(request, liveMode),
   });
 };

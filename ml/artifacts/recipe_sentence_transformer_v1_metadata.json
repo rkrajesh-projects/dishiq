@@ -1,0 +1,197 @@
+{
+  "model_name": "DishIQ Phase 15 Sentence Transformer Recommender",
+  "pretrained_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "model_type": "SentenceTransformer",
+  "embedding_dimension": 384,
+  "training_dataset_count": 1403,
+  "validation_dataset_count": 301,
+  "test_dataset_count": 301,
+  "total_matrix_size": 2005,
+  "normalization_strategy": "L2_Norm",
+  "feature_fields": [
+    "recipe_name",
+    "cuisine",
+    "diet",
+    "description",
+    "ingredients"
+  ],
+  "random_seed": 42,
+  "generation_timestamp": "2026-09-26T17:35:31.352454+00:00",
+  "performance": {
+    "model_load_time_sec": 4.497993230819702,
+    "full_corpus_generation_time_sec": 28.620418071746826
+  },
+  "evaluation": {
+    "validation_results": [
+      {
+        "config": {
+          "normalize_embeddings": true
+        },
+        "metrics": {
+          "HitRate@5": 1.0,
+          "HitRate@10": 1.0,
+          "config_id": 0,
+          "encoding_time_sec": 24.0926833152771
+        }
+      },
+      {
+        "config": {
+          "normalize_embeddings": false
+        },
+        "metrics": {
+          "HitRate@5": 1.0,
+          "HitRate@10": 1.0,
+          "config_id": 1,
+          "encoding_time_sec": 24.238820791244507
+        }
+      }
+    ],
+    "test_metrics": {
+      "HitRate@5": 1.0,
+      "HitRate@10": 1.0
+    },
+    "methodology": "Exact Normalized Recipe Name Retrieval Proxy. No fine-tuning.",
+    "limitations": "No legitimate user click/ground-truth labels exist.",
+    "comparison_tfidf_v2_metrics": {
+      "HitRate@5": 0.9700996677740864,
+      "HitRate@10": 0.9767441860465116
+    }
+  },
+  "qualitative_test_queries": {
+    "healthy Indian breakfast": [
+      {
+        "recipe_id": "fc2ca205-37da-4ec0-8f16-7047039c076c",
+        "recipe_name": "Panjiri Recipe - Healthy Punjabi Dry Fruit Snack",
+        "similarity": 0.5631353855133057
+      },
+      {
+        "recipe_id": "c22ef88b-3120-48fe-a5e7-1c70b1c0cb28",
+        "recipe_name": "Crispy Ribbon Pakoda Recipe - South Indian Diwali Snack | Easy Ribbon Murukku Recipe",
+        "similarity": 0.5325167179107666
+      },
+      {
+        "recipe_id": "287102e0-822e-471b-b1ce-29e7687f4c30",
+        "recipe_name": "Butter Murukku Recipe - Crunchy & Buttery Chakli Recipe | South Indian Tea-Time Snack",
+        "similarity": 0.5291740894317627
+      },
+      {
+        "recipe_id": "cc5a1b24-e310-4044-81a5-d9a3e4d930ae",
+        "recipe_name": "Healthy  Fried Rice",
+        "similarity": 0.5208228230476379
+      },
+      {
+        "recipe_id": "95077f9d-7c77-44c3-a97b-88c71e669b44",
+        "recipe_name": "Quick and Healthy Pav Bhaji - Roz Ka Khana With Figaro Olive Oil",
+        "similarity": 0.5136057734489441
+      }
+    ],
+    "quick paneer dinner": [
+      {
+        "recipe_id": "52c8c458-f59d-4c8e-8758-77fe69ff6b5b",
+        "recipe_name": "10 Min Cheesy Gnocchi With Seafood Sauce",
+        "similarity": 0.6542834639549255
+      },
+      {
+        "recipe_id": "9bc89b63-cb16-41b6-8e60-3b3e356e2f95",
+        "recipe_name": "Rajgira Paneer Paratha Recipe (Navratri Fasting/Vrat Recipe)",
+        "similarity": 0.6242977380752563
+      },
+      {
+        "recipe_id": "f01fc68b-a62e-4ccc-b668-eb5e5623cb8b",
+        "recipe_name": "Paneer In Lemon Honey Sauce Recipe",
+        "similarity": 0.6218672394752502
+      },
+      {
+        "recipe_id": "de565143-c9e4-4805-b321-7ad4e12fb7eb",
+        "recipe_name": "Homemade Paneer Recipe",
+        "similarity": 0.6205679774284363
+      },
+      {
+        "recipe_id": "a919e7a4-1baa-42af-9def-fda3c92e916c",
+        "recipe_name": "Paneer Tikka Kathi Roll Recipe",
+        "similarity": 0.6166826486587524
+      }
+    ],
+    "spicy South Indian vegetarian food": [
+      {
+        "recipe_id": "543c88aa-6904-41ed-8a62-cd8714e79b00",
+        "recipe_name": "Some Like It Hot",
+        "similarity": 0.6867184638977051
+      },
+      {
+        "recipe_id": "47b78172-9af5-4cdd-9616-8aeaebca2148",
+        "recipe_name": "Chicken  Tikka Masala   Vegan Style",
+        "similarity": 0.6515547037124634
+      },
+      {
+        "recipe_id": "1485a958-aafa-4e0e-8d07-9b889b697878",
+        "recipe_name": "Paki  Garam Masala",
+        "similarity": 0.627021312713623
+      },
+      {
+        "recipe_id": "15a62695-e511-4499-92a7-d2c22421b3fe",
+        "recipe_name": "Beans Vepudu Recipe (Andhra Style Beans Cooked With Spicy Sesame Spicy Mix)",
+        "similarity": 0.6227872371673584
+      },
+      {
+        "recipe_id": "36a95274-8554-4c5a-8744-da60755b0d97",
+        "recipe_name": "Palakura Vepudu with Garlic Recipe - Andhra Style Spinach Stir Fry",
+        "similarity": 0.6218781471252441
+      }
+    ],
+    "easy chicken curry": [
+      {
+        "recipe_id": "52b8850f-7253-475c-98e0-abf9b0110763",
+        "recipe_name": "Best Ever  Thai Chicken Curry",
+        "similarity": 0.6345696449279785
+      },
+      {
+        "recipe_id": "14f22d9c-2e4d-4b55-a583-deabcb0fdb55",
+        "recipe_name": "Creamy  Chicken Curry",
+        "similarity": 0.6258553266525269
+      },
+      {
+        "recipe_id": "1f474b2a-61a1-4168-9d40-9b767f10dcfe",
+        "recipe_name": "Pumpkin Curry With Chicken Recipe",
+        "similarity": 0.5883449912071228
+      },
+      {
+        "recipe_id": "f3805566-1960-41d1-9e64-cbf3ac28bb5f",
+        "recipe_name": "Sri Lankan Chicken Curry Recipe - Kukul Mas Curry",
+        "similarity": 0.5877534747123718
+      },
+      {
+        "recipe_id": "816b90c1-3bd9-4a6c-8eb4-65e7b76cd59e",
+        "recipe_name": "Roasted Chicken Curry Recipe In Spinach Parmesan Sauce",
+        "similarity": 0.5721267461776733
+      }
+    ],
+    "light vegetable meal": [
+      {
+        "recipe_id": "92f00031-ab4a-40bd-a614-37e829bf24b6",
+        "recipe_name": "10 Minute  Fat Free  Veggie Soup For One",
+        "similarity": 0.6028652191162109
+      },
+      {
+        "recipe_id": "2d8de811-0bc6-4dae-b822-fd52c0a2333a",
+        "recipe_name": "Roasted Vegetable Quesadilla Recipe With Zucchini, Carrots & Red Cabbage",
+        "similarity": 0.5676876306533813
+      },
+      {
+        "recipe_id": "d5701dd7-483d-45cc-af59-dc28286b3a25",
+        "recipe_name": "Savory Oatmeal Bowl with Chettinad Mushroom and Green Peas Stir Fry Recipe",
+        "similarity": 0.56573486328125
+      },
+      {
+        "recipe_id": "d6485b71-9097-42d3-9624-7fc95dd70f88",
+        "recipe_name": "Pasta Salad Recipe with Summer Vegetable Lettuce & Croutons",
+        "similarity": 0.5651980638504028
+      },
+      {
+        "recipe_id": "67058ab8-a935-434c-bb47-38915b7c7614",
+        "recipe_name": "Vegetarian Laksa Curry Recipe",
+        "similarity": 0.5518417358398438
+      }
+    ]
+  }
+}

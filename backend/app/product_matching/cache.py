@@ -28,7 +28,9 @@ def save_product_embeddings_artifact(
     """
     target_path = artifact_path or settings.PRODUCT_EMBEDDINGS_ARTIFACT_PATH
     os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
-    joblib.dump(embeddings_data, target_path, compress=3)
+    temp_path = f"{target_path}.tmp"
+    joblib.dump(embeddings_data, temp_path, compress=3)
+    os.replace(temp_path, target_path)
     logger.info(
         f"Saved product embeddings artifact to [{target_path}] "
         f"({len(embeddings_data.get('products', {}))} products)"

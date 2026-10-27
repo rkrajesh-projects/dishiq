@@ -1,14 +1,33 @@
 import pytest
 from datetime import datetime, timezone
 from fastapi import status
+from app.main import app
 from app.models.recipe import Recipe
 from app.models.user import User
-from app.api.pantry import get_current_user
+from app.api.deps import get_current_user
+
+
+@pytest.fixture(autouse=True)
+def override_auth(seeded_db):
+    user, _ = _get_seeded_recipe_and_user(seeded_db)
+    app.dependency_overrides[get_current_user] = lambda: user
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 def _get_seeded_recipe_and_user(db):
     """Retrieve first user and recipe from the seeded database."""
-    user = get_current_user(db)
+    user = db.query(User).first()
+    if not user:
+        from app.core.security import get_password_hash
+        user = User(
+            email="test_cook@example.com",
+            hashed_password=get_password_hash("demopassword"),
+            full_name="Test Cook",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
     recipe = db.query(Recipe).first()
     
     # Ensure recipe has at least 3 instructions for step navigation testing

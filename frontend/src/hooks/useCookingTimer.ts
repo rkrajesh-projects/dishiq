@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-export type TimerStatus = 'idle' | 'running' | 'paused' | 'completed';
+export type TimerStatus = 'idle' | 'running' | 'paused' | 'completed' | 'cancelled';
 
 export interface CookingTimer {
   status: TimerStatus;
@@ -10,7 +10,41 @@ export interface CookingTimer {
   pause: () => void;
   resume: () => void;
   reset: () => void;
+  cancel: () => void;
   setDuration: (seconds: number) => void;
+  notificationPermission: NotificationPermission | 'unsupported';
+  requestNotificationPermission: () => Promise<void>;
+}
+
+/**
+ * Synthesize a pleasant two-tone chime via Web Audio API.
+ * Uses no external assets and safely handles browser autoplay policies.
+ */
+export function playTimerChime(): void {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.type = 'sine';
+    const now = ctx.currentTime;
+    // Pleasant two-tone: D5 (587Hz) -> A5 (880Hz)
+    osc.frequency.setValueAtTime(587.33, now);
+    osc.frequency.setValueAtTime(880.0, now + 0.15);
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+    osc.start(now);
+    osc.stop(now + 0.6);
+  } catch {
+    // Graceful fallback if AudioContext is blocked or unsupported
+  }
 }
 
 /**
@@ -21,6 +55,12 @@ export function useCookingTimer(initialDuration = 0, onComplete?: () => void): C
   const [durationSeconds, setDurationSeconds] = useState(initialDuration);
   const [remainingSeconds, setRemainingSeconds] = useState(initialDuration);
   const [status, setStatus] = useState<TimerStatus>('idle');
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'unsupported';
+  });
 
   // Keep references of status, duration, and time boundaries to handle event loops cleanly
   const stateRef = useRef({
@@ -70,6 +110,18 @@ export function useCookingTimer(initialDuration = 0, onComplete?: () => void): C
       if (diff === 0) {
         syncState({ status: 'completed', endTime: null, pausedTimeRemaining: null });
         clearInterval(intervalId);
+        playTimerChime();
+
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('DishIQ Cooking Timer', {
+              body: 'A step timer has completed!',
+            });
+          } catch {
+            // Notification dispatch suppressed by browser
+          }
+        }
+
         if (onCompleteRef.current) {
           onCompleteRef.current();
         }
@@ -130,6 +182,15 @@ export function useCookingTimer(initialDuration = 0, onComplete?: () => void): C
     });
   };
 
+  const cancel = () => {
+    syncState({
+      status: 'cancelled',
+      remainingSeconds: 0,
+      endTime: null,
+      pausedTimeRemaining: null,
+    });
+  };
+
   const setDuration = (seconds: number) => {
     if (seconds < 0) return;
     syncState({
@@ -141,6 +202,17 @@ export function useCookingTimer(initialDuration = 0, onComplete?: () => void): C
     });
   };
 
+  const requestNotificationPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        setNotificationPermission(perm);
+      } catch {
+        setNotificationPermission('denied');
+      }
+    }
+  };
+
   return {
     status,
     remainingSeconds,
@@ -149,6 +221,9 @@ export function useCookingTimer(initialDuration = 0, onComplete?: () => void): C
     pause,
     resume,
     reset,
+    cancel,
     setDuration,
+    notificationPermission,
+    requestNotificationPermission,
   };
 }

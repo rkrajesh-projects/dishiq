@@ -2,8 +2,10 @@ from app.db.base import Base
 from app.models.user import User, UserPreference
 from app.models.recipe import Recipe, Ingredient, RecipeIngredient
 from app.models.grocery import GroceryStore, GroceryProduct, ProductPrice
-from app.models.pantry import PantryItem, RecipeFeedback
-from app.models.cooking_session import CookingSession
+from app.models.pantry import PantryItem, RecipeFeedback, PantryConsumptionLog
+from app.models.cooking_session import CookingSession, CookingTimer
+from app.models.meal_plan import MealPlan, MealPlanItem
+from app.models.shopping_list import ShoppingList, ShoppingListItem
 
 __all__ = [
     "Base",
@@ -17,5 +19,11 @@ __all__ = [
     "ProductPrice",
     "PantryItem",
     "RecipeFeedback",
+    "PantryConsumptionLog",
     "CookingSession",
+    "CookingTimer",
+    "MealPlan",
+    "MealPlanItem",
+    "ShoppingList",
+    "ShoppingListItem",
 ]

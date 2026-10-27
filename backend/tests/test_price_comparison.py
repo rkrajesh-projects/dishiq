@@ -108,12 +108,12 @@ class TestPriceComparisonService:
         assert best_opt.price == 90.25
         assert best_opt.currency == "INR"
 
-        # Package prices ascending: p3 (90.25) < p2 (95.0) < p1 (115.0)
+        # Unit prices ascending: p3 (0.451) < p1 (0.460) < p2 (0.475)
         assert results[0].product_id == "p3"
         assert results[0].price_rank == 1
-        assert results[1].product_id == "p2"
+        assert results[1].product_id == "p1"
         assert results[1].price_rank == 2
-        assert results[2].product_id == "p1"
+        assert results[2].product_id == "p2"
         assert results[2].price_rank == 3
 
     def test_missing_or_zero_price_handled_safely(self):

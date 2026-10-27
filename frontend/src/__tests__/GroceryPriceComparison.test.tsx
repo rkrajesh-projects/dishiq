@@ -333,4 +333,103 @@ describe('GroceryPriceComparison Component', () => {
     expect(item1.className).not.toContain('border-emerald-500');
     expect(screen.getByTestId('best-value-badge')).toBeInTheDocument();
   });
+
+  it('13. Renders live provider response with PROVIDER_LIVE badge, Swiggy Instamart store and real product fields', () => {
+    const liveProduct: ProductMatchResult = {
+      product_id: 'swiggy_milk_1',
+      product_name: 'Akshayakalpa Amrutha A2 Pasteurized Organic Milk',
+      brand: 'Akshayakalpa',
+      category: 'Dairy',
+      store_id: 'store_swiggy',
+      store_name: 'Swiggy Instamart',
+      price: 49.0,
+      currency: 'INR',
+      package_quantity: 500.0,
+      package_unit: 'ml',
+      unit_price: 0.098,
+      base_unit: 'ml',
+      similarity_score: 0.96,
+      matched_text: 'milk',
+      match_status: 'matched',
+      rank: 1,
+      price_rank: 1,
+      data_source_type: 'Swiggy Instamart',
+      price_freshness: 'PROVIDER_LIVE',
+    };
+
+    vi.spyOn(useGroceryHooks, 'useGroceryCompare').mockReturnValue({
+      data: {
+        ingredient_text: 'milk',
+        canonical_name: 'milk',
+        threshold: 0.4,
+        total_matches: 1,
+        results: [liveProduct],
+        best_option: liveProduct as unknown as BestProductOption,
+        comparison_mode: 'package_price',
+        data_source: 'live',
+        price_freshness: 'PROVIDER_LIVE',
+      },
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useGroceryHooks.useGroceryCompare>);
+
+    render(<GroceryPriceComparison ingredient="milk" live_mode={true} />);
+
+    // Verify Live Price badge
+    expect(screen.getByText(/LIVE PRICE/i)).toBeInTheDocument();
+
+    // Verify Live Product Details rendered directly from results
+    expect(screen.getByText('Akshayakalpa Amrutha A2 Pasteurized Organic Milk')).toBeInTheDocument();
+    expect(screen.getByText('₹49')).toBeInTheDocument();
+    expect(screen.getAllByText('Swiggy Instamart').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Akshayakalpa/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('14. Passes live_mode prop to useGroceryCompare hook', () => {
+    const hookSpy = vi.spyOn(useGroceryHooks, 'useGroceryCompare').mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useGroceryHooks.useGroceryCompare>);
+
+    render(<GroceryPriceComparison ingredient="milk" live_mode={true} limit={8} />);
+
+    expect(hookSpy).toHaveBeenCalledWith({
+      ingredient: 'milk',
+      limit: 8,
+      threshold: undefined,
+      live_mode: true,
+    });
+  });
+
+  it('15. Renders Demo Dataset badge in demo mode and does not label demo data as LIVE PRICE', () => {
+    vi.spyOn(useGroceryHooks, 'useGroceryCompare').mockReturnValue({
+      data: {
+        ingredient_text: 'milk',
+        canonical_name: 'milk',
+        threshold: 0.4,
+        total_matches: 1,
+        results: [sampleResult1],
+        best_option: sampleBestOption,
+        comparison_mode: 'package_price',
+        data_source: 'demo',
+        price_freshness: 'DEMO',
+      },
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useGroceryHooks.useGroceryCompare>);
+
+    render(<GroceryPriceComparison ingredient="milk" live_mode={false} />);
+
+    // Verify Demo Dataset badge is rendered
+    expect(screen.getByText(/Demo Dataset/i)).toBeInTheDocument();
+    // Verify LIVE PRICE is NOT rendered
+    expect(screen.queryByText(/LIVE PRICE/i)).not.toBeInTheDocument();
+  });
 });

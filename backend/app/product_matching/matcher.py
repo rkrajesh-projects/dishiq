@@ -1,5 +1,5 @@
-"""
-DishIQ Phase 6.1 — Grocery Product Matching
+﻿"""
+DishIQ Phase 6.1 â€” Grocery Product Matching
 Product Matcher module.
 
 Calculates cosine similarity between ingredient embeddings and grocery product embeddings,
@@ -114,7 +114,6 @@ class ProductMatcher:
         scored_results: List[ProductMatchResult] = []
 
         for p in products:
-            # Extract product metadata safely
             if isinstance(p, dict):
                 p_id = str(p.get("product_id") or p.get("id") or "")
                 p_name = str(p.get("product_name") or p.get("name") or "")
@@ -126,6 +125,12 @@ class ProductMatcher:
                 pkg_qty = p.get("package_quantity")
                 pkg_unit = p.get("package_unit")
                 p_vec = p.get("embedding")
+                source_platform = p.get("source_platform")
+                price_freshness = p.get("price_freshness")
+                mrp = p.get("mrp")
+                discount = p.get("discount")
+                location = p.get("location")
+                availability = p.get("availability", True)
             elif isinstance(p, GroceryProduct):
                 p_id = str(p.id)
                 p_name = str(p.name)
@@ -137,6 +142,12 @@ class ProductMatcher:
                 pkg_qty = p.package_quantity
                 pkg_unit = p.package_unit
                 p_vec = getattr(p, "embedding", None)
+                source_platform = "demo"
+                price_freshness = "CACHED"
+                mrp = getattr(p, "mrp", None)
+                discount = getattr(p, "discount", None)
+                location = getattr(p, "location", None)
+                availability = getattr(p, "availability", True)
             else:
                 continue
 
@@ -173,10 +184,16 @@ class ProductMatcher:
                     currency="INR",
                     package_quantity=pkg_qty,
                     package_unit=pkg_unit,
+                    mrp=mrp,
+                    discount=discount,
+                    location=location,
+                    availability=availability,
                     similarity_score=sim_score,
                     matched_text=matched_text,
                     match_status=status,
                     rank=1,  # Temporary, updated after sorting
+                    data_source_type=source_platform,
+                    price_freshness=price_freshness,
                 )
             )
 
@@ -203,3 +220,4 @@ class ProductMatcher:
             total_matches=matches_above_threshold,
             results=final_results,
         )
+

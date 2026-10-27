@@ -1,18 +1,70 @@
-﻿__pycache__/
-*.pyc
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+.pytest_cache/
+
+# Environments & Virtualenvs
+.venv/
+venv/
+ENV/
+env/
+*.env
 .env
+.env.local
+.env.*.local
+
+# Databases & Cache
+*.db
+*.sqlite3
+dishiq.db
+test_dishiq.db
+*.log
+
+# Node & Frontend
 node_modules/
 dist/
 build/
-*.db
-*.log
-.pytest_cache/
-ml/models/*.pkl
-ml/models/*.joblib
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+frontend/dist/
+frontend/node_modules/
+
+# IDE & OS
 .vscode/
 .idea/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
 
+# Temporary Test Results & Scripts
 test-results/
 **/test-results/
 verify_*.py
 *.cmd
+scratch/
+
+# Large Video Files & Local Screen Recordings
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Secrets & Local OAuth Tokens
+*swiggy_oauth_tokens*.json
+*token*.json
+credentials.json
+
+# Pretrained Hugging Face raw model cache (auto-downloaded by sentence-transformers on demand)
+ml/models/pretrained/models--*
+
+
+# Large raw external benchmark datasets (>100MB)
+dataset/*.csv
+!dataset/sample_indian_recipes.csv
+dataset/*.pkl
+

@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect } from 'vitest';
 import { Header } from '../components/layout/Header';
 
+import { AuthProvider } from '../context/AuthContext';
+
 const renderHeader = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -11,7 +13,9 @@ const renderHeader = () => {
   return render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Header />
+        <AuthProvider>
+          <Header />
+        </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

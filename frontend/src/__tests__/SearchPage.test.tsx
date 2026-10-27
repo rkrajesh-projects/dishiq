@@ -7,6 +7,7 @@ import * as recipesApi from '../api/recipes';
 
 vi.mock('../api/recipes', () => ({
   searchRecipes: vi.fn(),
+  getRecipeFilters: vi.fn(),
 }));
 
 const renderSearchPage = (initialEntries = ['/recipes']) => {
@@ -24,7 +25,12 @@ const renderSearchPage = (initialEntries = ['/recipes']) => {
 };
 
 describe('RecipeSearchPage Component', () => {
-  it('renders search title and filter chips', () => {
+  it('renders search title and filter chips', async () => {
+    (recipesApi.getRecipeFilters as any).mockResolvedValue({
+      cuisines: ['Indian', 'Italian'],
+      dietary_types: ['Vegetarian', 'Vegan', 'Non-Vegetarian']
+    });
+
     (recipesApi.searchRecipes as any).mockResolvedValueOnce({
       items: [],
       total: 0,
@@ -34,12 +40,17 @@ describe('RecipeSearchPage Component', () => {
     });
 
     renderSearchPage();
-    expect(screen.getByText('Recipe Search & Smart Ranking')).toBeInTheDocument();
-    expect(screen.getByText('Vegetarian')).toBeInTheDocument();
-    expect(screen.getByText('Vegan')).toBeInTheDocument();
+    expect(screen.getByText('Recipe Finder')).toBeInTheDocument();
+    expect(await screen.findByText('Vegetarian')).toBeInTheDocument();
+    expect(await screen.findByText('Vegan')).toBeInTheDocument();
   });
 
   it('renders recipe cards with recommendation tags when search data returns', async () => {
+    (recipesApi.getRecipeFilters as any).mockResolvedValue({
+      cuisines: ['Indian', 'Italian'],
+      dietary_types: ['Vegetarian', 'Vegan', 'Non-Vegetarian']
+    });
+
     (recipesApi.searchRecipes as any).mockResolvedValueOnce({
       items: [
         {

@@ -644,3 +644,89 @@ class TestPhase52APIMetadata:
         assert resp.status_code == 200
         r = resp.json()["results"][0]
         assert r["category"] is None
+
+
+# ===========================================================================
+# Phase 5 — Mixed Fractions, Word Boundaries & Distinct Concept Preservation
+# ===========================================================================
+
+class TestPhase5DistinctIngredientsAndFractions:
+    def test_text_mixed_fractions(self):
+        r1 = parse_ingredient("1 1/2 cups flour")
+        assert math.isclose(r1.quantity, 1.5, abs_tol=1e-6)
+        assert r1.unit == "cup"
+        assert r1.canonical_name == "flour"
+
+        r2 = parse_ingredient("1-1/2 cups maida")
+        assert math.isclose(r2.quantity, 1.5, abs_tol=1e-6)
+        assert r2.unit == "cup"
+        assert r2.canonical_name == "all-purpose flour"
+
+    def test_leading_of_stripped(self):
+        r = parse_ingredient("1 cup of milk")
+        assert r.quantity == 1.0
+        assert r.unit == "cup"
+        assert r.canonical_name == "milk"
+
+    def test_eggplant_distinct_from_egg(self):
+        r = parse_ingredient("1 medium eggplant")
+        assert r.canonical_name == "eggplant"
+        assert r.canonical_name != "egg"
+        assert r.category == "vegetable"
+
+    def test_buttermilk_distinct_from_butter(self):
+        r = parse_ingredient("2 cups buttermilk")
+        assert r.canonical_name == "buttermilk"
+        assert r.canonical_name != "butter"
+        assert r.category == "dairy"
+
+    def test_peanut_butter_distinct_from_butter(self):
+        r = parse_ingredient("2 tbsp peanut butter")
+        assert r.canonical_name == "peanut butter"
+        assert r.canonical_name != "butter"
+        assert r.category == "nut"
+
+    def test_coconut_milk_distinct_from_dairy_milk(self):
+        r = parse_ingredient("1 cup coconut milk")
+        assert r.canonical_name == "coconut milk"
+        assert r.canonical_name != "milk"
+
+    def test_mustard_oil_distinct_from_mustard_seeds(self):
+        r = parse_ingredient("2 tbsp mustard oil")
+        assert r.canonical_name == "mustard oil"
+        assert r.canonical_name != "mustard seeds"
+        assert r.category == "oil"
+
+    def test_coriander_seeds_distinct_from_coriander_leaves(self):
+        r = parse_ingredient("1 tsp coriander seeds")
+        assert r.canonical_name == "coriander seeds"
+        assert r.category == "spice"
+
+    def test_ground_spices_distinct(self):
+        r1 = parse_ingredient("1 tsp cumin powder")
+        assert r1.canonical_name == "cumin powder"
+        assert r1.category == "spice"
+
+        r2 = parse_ingredient("1/2 tsp ginger powder")
+        assert r2.canonical_name == "ginger powder"
+        assert r2.category == "spice"
+
+    def test_cloves_distinction(self):
+        # As unit of garlic
+        r_garlic = parse_ingredient("4 cloves of garlic")
+        assert r_garlic.quantity == 4.0
+        assert r_garlic.unit == "clove"
+        assert r_garlic.canonical_name == "garlic"
+
+        # As the whole spice
+        r_clove = parse_ingredient("4 cloves")
+        assert r_clove.quantity == 4.0
+        assert r_clove.canonical_name == "clove"
+        assert r_clove.category == "spice"
+
+        # Ground cloves: note extracted as prep note, canonical resolved to clove
+        r_ground = parse_ingredient("1/4 tsp ground cloves")
+        assert r_ground.unit == "tsp"
+        assert r_ground.canonical_name == "clove"
+        assert r_ground.preparation_note == "ground"
+        assert r_ground.category == "spice"

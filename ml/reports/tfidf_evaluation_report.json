@@ -1,0 +1,91 @@
+{
+  "model_name": "DishIQ Phase 14B TF-IDF Recommender",
+  "model_version": "2.0.0",
+  "algorithm": "TF-IDF + Cosine Similarity",
+  "training_dataset_count": 1403,
+  "validation_dataset_count": 301,
+  "test_dataset_count": 301,
+  "total_matrix_size": 2005,
+  "feature_count": 5000,
+  "vocabulary_size": 5000,
+  "tf_idf_parameters": {
+    "ngram_range": [
+      1,
+      2
+    ],
+    "max_features": 5000,
+    "min_df": 2,
+    "max_df": 0.95
+  },
+  "feature_fields": [
+    "recipe_name",
+    "cuisine",
+    "diet",
+    "description",
+    "ingredients"
+  ],
+  "random_seed": 42,
+  "training_timestamp": "2026-09-26T17:22:58.031502+00:00",
+  "sklearn_version": "1.6.1",
+  "evaluation": {
+    "validation_results": [
+      {
+        "config": {
+          "ngram_range": [
+            1,
+            1
+          ],
+          "max_features": 2000,
+          "min_df": 2,
+          "max_df": 0.95
+        },
+        "metrics": {
+          "HitRate@5": 0.9568106312292359,
+          "HitRate@10": 0.9634551495016611,
+          "config_id": 0,
+          "runtime_sec": 0.10954117774963379
+        }
+      },
+      {
+        "config": {
+          "ngram_range": [
+            1,
+            2
+          ],
+          "max_features": 5000,
+          "min_df": 2,
+          "max_df": 0.95
+        },
+        "metrics": {
+          "HitRate@5": 0.9634551495016611,
+          "HitRate@10": 0.9634551495016611,
+          "config_id": 1,
+          "runtime_sec": 0.20792651176452637
+        }
+      },
+      {
+        "config": {
+          "ngram_range": [
+            1,
+            2
+          ],
+          "max_features": 10000,
+          "min_df": 2,
+          "max_df": 0.95
+        },
+        "metrics": {
+          "HitRate@5": 0.9601328903654485,
+          "HitRate@10": 0.9634551495016611,
+          "config_id": 2,
+          "runtime_sec": 0.2258598804473877
+        }
+      }
+    ],
+    "test_metrics": {
+      "HitRate@5": 0.9700996677740864,
+      "HitRate@10": 0.9767441860465116
+    },
+    "methodology": "Proxy retrieval using exact normalized recipe names. Strict isolation of fitting on Train only.",
+    "limitations": "No legitimate user click/ground-truth labels exist. Evaluation uses exact name retrieval as a proxy for structural soundness."
+  }
+}

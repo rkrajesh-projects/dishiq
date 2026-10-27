@@ -1,5 +1,5 @@
 import React from 'react';
-import { Store, ShoppingBag, RefreshCw, Trophy, Sparkles, Tag } from 'lucide-react';
+import { Store, ShoppingBag, RefreshCw, Trophy, Sparkles, Tag, AlertTriangle, TrendingDown } from 'lucide-react';
 import { useGroceryCompare } from '../../hooks/useGrocery';
 import { useGroceryFilters } from '../../hooks/useGroceryFilters';
 import { GroceryFilterBar } from './GroceryFilterBar';
@@ -15,6 +15,7 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
   ingredient,
   limit = 10,
   threshold,
+  live_mode = false,
   className = '',
   title,
 }) => {
@@ -22,6 +23,7 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
     ingredient,
     limit,
     threshold,
+    live_mode,
   });
 
   const {
@@ -30,6 +32,7 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
     sortOption,
     setSortOption,
     availableStores,
+    hasComparableUnitPrices,
     filteredAndSortedResults,
     totalCount,
     filteredCount,
@@ -130,18 +133,38 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
         </h3>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 font-medium">
+          <span className="text-xs text-gray-500 font-medium hidden sm:inline">
             Query: &quot;{data.canonical_name || data.ingredient_text}&quot;
           </span>
           {data.comparison_mode && (
             <span
-              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100"
+              className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                isUnitPriceMode
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-blue-50 text-blue-700 border border-blue-200'
+              }`}
               data-testid="comparison-mode-badge"
             >
-              <Sparkles className="w-3 h-3 text-emerald-600" />
-              Mode: {isUnitPriceMode ? 'Normalized Unit Price (₹/unit)' : 'Package Price (₹)'}
+              <Sparkles className="w-3 h-3" />
+              {isUnitPriceMode ? 'Normalized Unit Price' : 'Package Price'}
             </span>
           )}
+          {data.data_source === 'live' || data.price_freshness === 'PROVIDER_LIVE' || data.price_freshness === 'LIVE' ? (
+             <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs" title="Prices fetched in real-time from store provider">
+               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> LIVE PRICE
+             </span>
+          ) : data.data_source === 'demo' || data.price_freshness === 'DEMO' ? (
+             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+               <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Demo Dataset
+             </span>
+          ) : (
+             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-50 text-gray-600 border border-gray-200">
+               <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> Cached
+             </span>
+          )}
+          <button onClick={() => refetch()} className="text-xs text-blue-600 font-medium hover:text-blue-800 flex items-center gap-1 px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 transition-colors">
+             <RefreshCw className="w-3 h-3" /> Refresh Prices
+          </button>
         </div>
       </div>
 
@@ -153,6 +176,7 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
           sortOption={sortOption}
           onSelectSort={setSortOption}
           availableStores={availableStores}
+          hasComparableUnitPrices={hasComparableUnitPrices}
           totalCount={totalCount}
           filteredCount={filteredCount}
         />
@@ -184,7 +208,12 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
           {filteredAndSortedResults.map((product) => {
             const isBestValue = Boolean(bestOptionId && product.product_id === bestOptionId);
             const safePrice = product.price !== null && product.price !== undefined ? safeNumber(product.price) : null;
-            const safeUnitPrice = product.unit_price !== null && product.unit_price !== undefined ? safeNumber(product.unit_price) : null;
+            
+            // Standardized unit price preferred over raw base unit price
+            const displayUnitPrice = product.standardized_unit_price !== null && product.standardized_unit_price !== undefined
+              ? safeNumber(product.standardized_unit_price)
+              : (product.unit_price !== null && product.unit_price !== undefined ? safeNumber(product.unit_price) : null);
+            const displayUnit = product.standardized_unit || product.base_unit;
 
             const isSelected = selectedProductId === product.product_id;
             const cardStyle = isSelected
@@ -202,9 +231,16 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     {/* Store Name Badge */}
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-800 bg-gray-100 px-2.5 py-1 rounded-lg truncate">
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg truncate ${
+                      product.price_freshness === 'PROVIDER_LIVE' || data.data_source === 'live'
+                        ? 'text-emerald-800 bg-emerald-50 border border-emerald-100'
+                        : 'text-gray-800 bg-gray-100'
+                    }`}>
                       <Store className="w-3.5 h-3.5 text-gray-600 shrink-0" />
                       {product.store_name || 'Store Listing'}
+                      {(product.price_freshness === 'PROVIDER_LIVE' || data.data_source === 'live') && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Live Store Product" />
+                      )}
                     </span>
 
                     {/* Price Rank Badge */}
@@ -222,18 +258,28 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
                     )}
                   </div>
 
-                  {/* Best Value Badge */}
-                  {isBestValue && (
-                    <div className="pt-1">
+                  {/* Best Value Badge & Savings Pill */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {isBestValue && (
                       <span
-                        className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-extrabold bg-amber-500 text-white shadow-xs"
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-500 text-white shadow-xs"
                         data-testid="best-value-badge"
                       >
-                        <Trophy className="w-3.5 h-3.5 text-amber-100 fill-amber-100" />
+                        <Trophy className="w-3 h-3 text-amber-100 fill-amber-100" />
                         Best Value
                       </span>
-                    </div>
-                  )}
+                    )}
+                    {product.savings_amount !== undefined && product.savings_amount !== null && product.savings_amount > 0 && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        title={product.reference_product_name ? `Savings vs ${product.reference_product_name}` : 'Savings vs higher-priced offer'}
+                        data-testid="savings-badge"
+                      >
+                        <TrendingDown className="w-3 h-3 text-emerald-600" />
+                        Save {formatINR(product.savings_amount)} ({product.savings_percent}%)
+                      </span>
+                    )}
+                  </div>
 
                   {/* Product Metadata */}
                   <div>
@@ -253,19 +299,28 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
                         </span>
                       )}
                     </div>
+                    {/* Incomparable / Uncertainty Note */}
+                    {product.is_comparable === false && product.comparison_notes && (
+                      <div className="mt-1.5">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                          {product.comparison_notes}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Price Breakdown */}
                 <div className="border-t border-gray-100 pt-3 mt-4 flex items-end justify-between">
-                  {isUnitPriceMode && safeUnitPrice !== null && product.base_unit ? (
+                  {isUnitPriceMode && displayUnitPrice !== null && displayUnit ? (
                     /* Unit Price Highlight Mode */
                     <div>
                       <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide block">
                         Unit Price
                       </span>
                       <span className="text-lg font-extrabold text-emerald-700 tracking-tight">
-                        {formatINR(safeUnitPrice)}/{product.base_unit}
+                        {formatINR(displayUnitPrice)}/{displayUnit}
                       </span>
                       {safePrice !== null && (
                         <span className="text-xs text-gray-500 block">
@@ -286,9 +341,9 @@ export const GroceryPriceComparison: React.FC<GroceryPriceComparisonProps> = ({
                       ) : (
                         <span className="text-sm font-medium text-gray-400">Price unavailable</span>
                       )}
-                      {safeUnitPrice !== null && product.base_unit && (
+                      {displayUnitPrice !== null && displayUnit && (
                         <span className="text-xs font-semibold text-emerald-700 block mt-0.5">
-                          {formatINR(safeUnitPrice)}/{product.base_unit}
+                          {formatINR(displayUnitPrice)}/{displayUnit}
                         </span>
                       )}
                     </div>

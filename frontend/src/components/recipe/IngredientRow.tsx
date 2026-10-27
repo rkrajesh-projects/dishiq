@@ -21,6 +21,7 @@ export interface IngredientRowProps {
   onQuickMatch?: (ingredientName: string) => void;
   isSelected?: boolean;
   onToggle?: () => void;
+  scaleFactor?: number;
 }
 
 /** Capitalise first letter of each word */
@@ -40,6 +41,7 @@ export const IngredientRow: React.FC<IngredientRowProps> = ({
   onQuickMatch,
   isSelected = false,
   onToggle,
+  scaleFactor = 1,
 }) => {
   const {
     canonical_name,
@@ -56,12 +58,22 @@ export const IngredientRow: React.FC<IngredientRowProps> = ({
     parser_version,
   } = ingredient;
 
-  const qtyText = [formatQty(quantity), unit].filter(Boolean).join(' ');
+  const effectiveQty = (quantity !== null && quantity !== undefined && scaleFactor && scaleFactor !== 1 && !to_taste)
+    ? Math.round(quantity * scaleFactor * 100) / 100
+    : quantity;
+
+  const qtyText = [formatQty(effectiveQty), unit].filter(Boolean).join(' ');
   const isDev = import.meta.env.DEV && import.meta.env.MODE === 'development';
   const targetIngredient = canonical_name || display_name;
 
   return (
-    <li className="py-3 flex flex-col gap-1.5 border-b border-gray-50 last:border-0">
+    <li
+      className={`py-3 flex flex-col gap-1.5 border-b border-gray-50 last:border-0 transition-colors ${
+        (isSelected || inPantry) ? 'bg-emerald-50/40 rounded-xl px-2.5 -mx-2.5' : ''
+      }`}
+      data-testid={`ingredient-row-${canonical_name}`}
+      data-in-pantry={inPantry || isSelected}
+    >
       {/* ── Main row ──────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-2 text-sm">
         {/* Left: icon + name */}

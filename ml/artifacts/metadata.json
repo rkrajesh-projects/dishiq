@@ -1,11 +1,18 @@
 {
   "model_name": "DishIQ Recipe TF-IDF Recommender",
-  "model_version": "1.0.0",
+  "model_version": "1.1.0",
   "algorithm": "TF-IDF + Cosine Similarity",
+  "algorithm_type": "Classical NLP / Information Retrieval (NOT a neural network)",
   "feature_count": 377,
+  "ngram_range": [
+    1,
+    2
+  ],
+  "stop_words": "english",
+  "max_features": 500,
   "dataset_version": "1.0.0",
-  "training_timestamp": "2026-09-01T14:55:43.451597+00:00",
-  "sklearn_version": "1.6.1",
+  "training_timestamp": "2026-10-18T14:33:43.022572+00:00",
+  "sklearn_version": "1.9.1",
   "artifact_filename": "recipe_tfidf.joblib",
   "total_recipes": 15,
   "artifact_path": "D:\\DishIQ\\ml\\artifacts\\recipe_tfidf.joblib"

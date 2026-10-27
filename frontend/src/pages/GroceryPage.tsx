@@ -15,17 +15,22 @@ import { GroceryStore, GroceryProduct } from '../types';
 import { safeNumber } from '../utils/currency';
 import { Search, Sparkles } from 'lucide-react';
 
+import { CartOptimizeResponse } from '../types';
+
 interface StoreCartSummary {
   store: GroceryStore;
   itemCost: number;
   deliveryFee: number;
   totalCost: number;
+  items?: any[];
 }
 
 export const GroceryPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const recipeId = searchParams.get('recipeId');
   const [searchIngredient, setSearchIngredient] = useState('paneer');
+  const [isLiveMode, setIsLiveMode] = useState<boolean>(true);
+  const [optimizedResult, setOptimizedResult] = useState<CartOptimizeResponse | null>(null);
 
   const {
     data: storesData,
@@ -65,6 +70,20 @@ export const GroceryPage: React.FC = () => {
 
   // Calculate realistic store cart summaries from product API data or fallback seeded values
   const storeSummaries: StoreCartSummary[] = stores.map((store) => {
+    // If we have an optimized cart, use its exact itemized data to explain the cart!
+    if (optimizedResult && optimizedResult.store_baskets) {
+      const optimizedStore = optimizedResult.store_baskets.find((b: any) => b.store_name === store.name || b.store_id === store.id);
+      if (optimizedStore) {
+        return {
+          store,
+          itemCost: roundCurrency(optimizedStore.subtotal),
+          deliveryFee: roundCurrency(optimizedStore.delivery_fee),
+          totalCost: roundCurrency(optimizedStore.total),
+          items: optimizedStore.selected_products,
+        };
+      }
+    }
+
     const storeProducts = products.filter((p) => p.store_id === store.id);
 
     let itemCost = 0;
@@ -125,12 +144,38 @@ export const GroceryPage: React.FC = () => {
         subtitle="Match ingredients against store products using AI semantic embeddings and compare prices in INR (₹)"
       />
 
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-8 text-xs text-amber-800">
-        <strong>Demonstration Notice:</strong> Store prices shown below are demonstration retail datasets in Indian Rupees (INR). DishIQ does not scrape restricted grocery websites.
+      <div
+        className={`rounded-2xl p-4 mb-8 text-xs border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+          isLiveMode
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            : 'bg-amber-50 border-amber-200 text-amber-800'
+        }`}
+        data-testid="live-mode-banner"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isLiveMode ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+          <div>
+            <strong>{isLiveMode ? 'Live Provider Mode Active:' : 'Demo Mode Active:'}</strong>{' '}
+            {isLiveMode
+              ? 'Real-time grocery product comparison and pricing fetched live from authorized providers (Swiggy Instamart).'
+              : 'Store prices shown below are demonstration retail datasets in Indian Rupees (INR).'}
+          </div>
+        </div>
+        <button
+          onClick={() => setIsLiveMode(!isLiveMode)}
+          className={`px-3 py-1.5 rounded-xl font-semibold transition-all text-xs shrink-0 self-start sm:self-center shadow-xs border ${
+            isLiveMode
+              ? 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+              : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-100'
+          }`}
+          data-testid="toggle-live-mode"
+        >
+          {isLiveMode ? 'Switch to Demo Mode' : 'Switch to Live Mode'}
+        </button>
       </div>
       {recipeId && (
         <div className="mb-10">
-          <CartOptimizationPanel />
+          <CartOptimizationPanel onOptimizationResult={setOptimizedResult} defaultLiveMode={isLiveMode} />
         </div>
       )}
 
@@ -177,17 +222,22 @@ export const GroceryPage: React.FC = () => {
         </div>
 
         {/* Matched Cards List */}
-        <GroceryMatchList ingredient={searchIngredient} limit={6} />
+        <GroceryMatchList ingredient={searchIngredient} limit={6} live_mode={isLiveMode} />
       </div>
 
       {/* Multi-Store Price Comparison Breakdown */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm mb-10">
-        <GroceryPriceComparison ingredient={searchIngredient} limit={6} />
+        <GroceryPriceComparison ingredient={searchIngredient} limit={6} live_mode={isLiveMode} />
       </div>
 
       {/* Multi-Store Cart Summaries Section */}
       <div className="mb-6">
-        <h3 className="text-base font-bold text-gray-900 mb-4">Store Cart Summaries</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-bold text-gray-900">Demo Store Cart Summaries</h3>
+          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+            Static Catalog
+          </span>
+        </div>
         {isLoading ? (
           <LoadingState message="Loading grocery stores and product prices..." />
         ) : isError ? (
@@ -206,17 +256,22 @@ export const GroceryPage: React.FC = () => {
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {storeSummaries.map((summary) => (
-              <PriceComparisonCard
-                key={summary.store.id}
-                store={summary.store}
-                itemCost={summary.itemCost}
-                deliveryFee={summary.deliveryFee}
-                isLowestPrice={summary.totalCost === lowestTotal && lowestTotal > 0}
-                isSelected={selectedStoreId === summary.store.id}
-                onClick={() => setUserSelectedStoreId(summary.store.id)}
-              />
-            ))}
+            {storeSummaries.map((summary) => {
+              const isBest = summary.totalCost === lowestTotal && lowestTotal > 0;
+              return (
+                <PriceComparisonCard
+                  key={summary.store.id}
+                  store={summary.store}
+                  itemCost={summary.itemCost}
+                  deliveryFee={summary.deliveryFee}
+                  isLowestPrice={isBest}
+                  isSelected={selectedStoreId === summary.store.id}
+                  onClick={() => setUserSelectedStoreId(summary.store.id)}
+                  items={summary.items}
+                  isExpandedByDefault={isBest}
+                />
+              );
+            })}
           </div>
         )}
       </div>

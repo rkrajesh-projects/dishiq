@@ -19,6 +19,15 @@ engine = create_engine(
     echo=False,
 )
 
+if database_url.startswith("sqlite"):
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -47,9 +56,13 @@ def init_db() -> None:
 def get_db() -> Generator[Session, None, None]:
     """
     FastAPI dependency yielding a transactional SQLAlchemy session.
+    Explicitly rolls back any pending transaction if an unhandled exception occurs.
     """
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

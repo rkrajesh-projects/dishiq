@@ -21,7 +21,14 @@ class RecipeService:
             )
         return RecipeDetailRead.model_validate(recipe)
 
+    def get_recipe_by_exact_name(self, name: str) -> Optional[RecipeRead]:
+        recipe = self.repo.get_by_exact_name(name)
+        if not recipe:
+            return None
+        return RecipeRead.model_validate(recipe)
+
     def list_recipes(
+
         self,
         cuisine: Optional[str] = None,
         dietary_type: Optional[str] = None,

@@ -14,6 +14,11 @@ class RecommendationRequest(BaseModel):
 class RecommendedRecipeRead(RecipeRead):
     score: float
     explanations: List[str]
+    tfidf_score: Optional[float] = None
+    semantic_score: Optional[float] = None
+    suitability_score: Optional[float] = None
+    cluster_id: Optional[int] = None
+    hybrid_score: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 

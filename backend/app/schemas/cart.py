@@ -38,6 +38,7 @@ class CartIngredientRequest(BaseModel):
 
 class CartCompareRequest(BaseModel):
     """Request body for cart comparison and optimization endpoints."""
+    budget_cap: Optional[float] = Field(None, description="Maximum budget for the cart")
     ingredients: List[CartIngredientRequest] = Field(
         ..., min_length=1, max_length=50,
         description="List of required ingredients with quantities"
@@ -56,6 +57,8 @@ class CartProductSelection(BaseModel):
     package_unit: Optional[str] = Field(None, description="Package size unit")
     packages_required: int = Field(..., ge=1, description="Number of packages needed")
     package_price: Optional[float] = Field(None, description="Price per package in INR")
+    unit_price: Optional[float] = Field(None, description="Normalized price per base unit")
+    unit_price_label: Optional[str] = Field(None, description="Formatted unit price string")
     line_cost: float = Field(..., description="Total line cost (packages × price) in INR")
     currency: str = Field(default="INR", description="Currency code")
     match_score: float = Field(..., ge=0.0, le=1.0, description="Semantic match similarity score")
@@ -126,6 +129,9 @@ class CartOptimizeResponse(BaseModel):
     )
     alternatives: List[CartStrategyResult] = Field(
         default_factory=list, description="Alternative strategy results"
+    )
+    store_baskets: List[CartStoreBreakdown] = Field(
+        default_factory=list, description="Itemized cart breakdowns for every individual store"
     )
     total_cost: float = Field(
         ..., description="Total cost of the recommended strategy in INR"

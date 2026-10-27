@@ -1,0 +1,39 @@
+# Virtual environments
+**/.venv/
+**/venv/
+.venv/
+venv/
+backend/venv/
+
+# Python & testing caches
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/test-results/
+.coverage
+htmlcov/
+
+# Environment files & local databases
+.env
+.env.*
+*.sqlite*
+*.db
+backend/*.db
+
+# Offline raw datasets (850MB+ Kaggle raw CSVs not needed in runtime container)
+dataset/
+
+# Other services and documentation
+frontend/
+e2e/
+docs/
+.git/
+.github/
+
+# OS and IDE files
+**/.DS_Store
+Thumbs.db
+.vscode/
+.idea/

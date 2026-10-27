@@ -141,4 +141,33 @@ describe('GroceryPage — Store Cart Selection', () => {
     expect(card1).toContainElement(screen.getByText('Best Cart'));
     expect(card2).not.toContainElement(screen.queryByText('Best Cart')!);
   });
+
+  it('renders Live Provider Mode banner by default and allows toggling to Demo Mode', async () => {
+    renderGroceryPage();
+
+    // Verify live mode banner is active by default
+    const banner = screen.getByTestId('live-mode-banner');
+    expect(banner).toBeInTheDocument();
+    expect(screen.getByText(/Live Provider Mode Active:/i)).toBeInTheDocument();
+
+    const toggleBtn = screen.getByTestId('toggle-live-mode');
+    expect(toggleBtn).toHaveTextContent('Switch to Demo Mode');
+
+    // Click toggle to switch to Demo Mode
+    fireEvent.click(toggleBtn);
+    expect(screen.getByText(/Demo Mode Active:/i)).toBeInTheDocument();
+    expect(toggleBtn).toHaveTextContent('Switch to Live Mode');
+
+    // Click toggle again to switch back to Live Mode
+    fireEvent.click(toggleBtn);
+    expect(screen.getByText(/Live Provider Mode Active:/i)).toBeInTheDocument();
+    expect(toggleBtn).toHaveTextContent('Switch to Demo Mode');
+  });
+
+  it('renders CartOptimizationPanel when recipeId is present in search parameters', async () => {
+    renderGroceryPage('?recipeId=recipe-abc-123');
+
+    // CartOptimizationPanel mock is rendered
+    expect(await screen.findByTestId('mock-cart-panel')).toBeInTheDocument();
+  });
 });

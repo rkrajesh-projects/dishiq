@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi } from 'vitest';
 import { Header } from '../components/layout/Header';
+import { AuthProvider } from '../context/AuthContext';
 import * as healthApi from '../api/health';
 
 vi.mock('../api/health', () => ({
@@ -20,7 +21,9 @@ describe('OfflineState Component Integration', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          <Header />
+          <AuthProvider>
+            <Header />
+          </AuthProvider>
         </BrowserRouter>
       </QueryClientProvider>
     );

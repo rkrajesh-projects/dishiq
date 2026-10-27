@@ -2,12 +2,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   startCookingSession,
   getCookingSession,
+  updateCookingSession,
   nextCookingStep,
   previousCookingStep,
+  pauseCookingSession,
+  resumeCookingSession,
   completeCookingSession,
-  getActiveCookingSession
+  getActiveCookingSession,
+  getPreparationChecklist,
+  updatePreparedIngredients,
 } from '../api/cooking';
-import { CookingSession, CookingSessionCreate } from '../types';
+import { CookingSession, CookingSessionCreate, CookingSessionUpdate, PreparationChecklist } from '../types/cooking';
 
 export const useCookingSession = (sessionId: string) => {
   return useQuery<CookingSession, Error>({
@@ -15,22 +20,16 @@ export const useCookingSession = (sessionId: string) => {
     queryFn: () => getCookingSession(sessionId),
     enabled: Boolean(sessionId),
     retry: 1,
-    // Don't treat the session as stale for 30s to avoid redundant refetches
-    // while the user is actively navigating steps.
     staleTime: 30_000,
-    // Restoring focus to the tab (e.g. after a browser back/forward) should
-    // always pull the latest persisted current_step from the backend.
     refetchOnWindowFocus: true,
   });
 };
 
-export const useActiveCookingSession = () => {
+export const useActiveCookingSession = (recipeId?: string) => {
   return useQuery<CookingSession | null, Error>({
-    queryKey: ['active-cooking-session'],
-    queryFn: () => getActiveCookingSession(),
+    queryKey: ['active-cooking-session', recipeId],
+    queryFn: () => getActiveCookingSession(recipeId),
     retry: 1,
-    // Refresh the spotlight whenever the tab regains focus so that completed
-    // sessions disappear from the home page promptly.
     refetchOnWindowFocus: true,
   });
 };
@@ -38,9 +37,10 @@ export const useActiveCookingSession = () => {
 export const useStartCooking = () => {
   const queryClient = useQueryClient();
   return useMutation<CookingSession, Error, CookingSessionCreate>({
-    mutationFn: (payload) => startCookingSession(payload.recipe_id, payload.notes),
-    onSuccess: () => {
+    mutationFn: (payload) => startCookingSession(payload.recipe_id, payload.notes, payload.servings),
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['active-cooking-session'] });
+      queryClient.setQueryData(['cooking-session', data.id], data);
     },
   });
 };
@@ -50,9 +50,7 @@ export const useNextStep = (sessionId: string) => {
   return useMutation<CookingSession, Error, void>({
     mutationFn: () => nextCookingStep(sessionId),
     onSuccess: (data) => {
-      // Immediately update the local cache so the UI doesn't wait for a refetch.
       queryClient.setQueryData(['cooking-session', sessionId], data);
-      // Invalidate to ensure the server state is eventually consistent.
       queryClient.invalidateQueries({ queryKey: ['cooking-session', sessionId] });
     },
   });
@@ -63,10 +61,32 @@ export const usePreviousStep = (sessionId: string) => {
   return useMutation<CookingSession, Error, void>({
     mutationFn: () => previousCookingStep(sessionId),
     onSuccess: (data) => {
-      // Immediately update the local cache so the UI doesn't wait for a refetch.
       queryClient.setQueryData(['cooking-session', sessionId], data);
-      // Invalidate to ensure the server state is eventually consistent.
       queryClient.invalidateQueries({ queryKey: ['cooking-session', sessionId] });
+    },
+  });
+};
+
+export const usePauseSession = (sessionId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<CookingSession, Error, void>({
+    mutationFn: () => pauseCookingSession(sessionId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['cooking-session', sessionId], data);
+      queryClient.invalidateQueries({ queryKey: ['cooking-session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['active-cooking-session'] });
+    },
+  });
+};
+
+export const useResumeSession = (sessionId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<CookingSession, Error, void>({
+    mutationFn: () => resumeCookingSession(sessionId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['cooking-session', sessionId], data);
+      queryClient.invalidateQueries({ queryKey: ['cooking-session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['active-cooking-session'] });
     },
   });
 };
@@ -79,6 +99,26 @@ export const useCompleteSession = (sessionId: string) => {
       queryClient.setQueryData(['cooking-session', sessionId], data);
       queryClient.invalidateQueries({ queryKey: ['cooking-session', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['active-cooking-session'] });
+    },
+  });
+};
+
+export const usePreparationChecklist = (sessionId: string) => {
+  return useQuery<PreparationChecklist, Error>({
+    queryKey: ['preparation-checklist', sessionId],
+    queryFn: () => getPreparationChecklist(sessionId),
+    enabled: Boolean(sessionId),
+    staleTime: 10_000,
+  });
+};
+
+export const useUpdatePreparedIngredients = (sessionId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<CookingSession, Error, string[]>({
+    mutationFn: (ingredients) => updatePreparedIngredients(sessionId, ingredients),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['cooking-session', sessionId], data);
+      queryClient.invalidateQueries({ queryKey: ['preparation-checklist', sessionId] });
     },
   });
 };

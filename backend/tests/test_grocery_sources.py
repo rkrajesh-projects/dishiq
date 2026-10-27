@@ -1,8 +1,10 @@
 import pytest
 from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.grocery_sources import (
     NormalizedGroceryProduct,
     BaseGroceryProvider,
@@ -10,6 +12,7 @@ from app.grocery_sources import (
     DemoGroceryProvider,
     McpGroceryProvider,
 )
+from app.grocery_sources.factory import get_configured_providers
 from app.models.grocery import GroceryStore, GroceryProduct, ProductPrice
 
 # Dummy provider class for testing BaseGroceryProvider abstract class behavior
@@ -42,7 +45,7 @@ class MockGroceryProvider(BaseGroceryProvider):
                 availability=True,
                 product_url="http://mock.url",
                 retrieved_at=datetime.now(timezone.utc),
-                price_freshness="LIVE",
+                price_freshness="PROVIDER_LIVE",
             )
         ]
 
@@ -70,10 +73,10 @@ def test_normalized_product_validation():
         availability=True,
         product_url="http://quickmart.test/paneer",
         retrieved_at=datetime.now(timezone.utc),
-        price_freshness="LIVE",
+        price_freshness="PROVIDER_LIVE",
     )
     assert valid_product.source_product_id == "p999"
-    assert valid_product.price_freshness == "LIVE"
+    assert valid_product.price_freshness == "PROVIDER_LIVE"
 
     # Invalid validation: missing required field (source_product_id)
     with pytest.raises(ValidationError):
@@ -83,6 +86,14 @@ def test_normalized_product_validation():
             product_name="Paneer Blocks",
             retrieved_at=datetime.now(timezone.utc),
         )
+
+
+def test_factory_returns_live_providers_if_set(seeded_db):
+    """Test factory enables swiggy instamart if config set"""
+    with patch.object(settings, "SWIGGY_INSTAMART_ACCESS_TOKEN", "mock_token"):
+        providers = get_configured_providers(seeded_db, live_mode=True)
+        assert len(providers) == 1
+        assert providers[0].provider_name == "swiggy_instamart"
 
 
 def test_provider_registry_registration():
@@ -195,20 +206,18 @@ def test_demo_provider_retrieval(seeded_db: Session):
     assert provider.provider_name == "demo"
 
     import asyncio
-    loop = asyncio.get_event_loop()
-    
     # Query with unique prefix to prevent collision with other seeded Paneer items
-    results = loop.run_until_complete(provider.search_products("Reg Paneer"))
+    results = asyncio.run(provider.search_products("Reg Paneer"))
 
     assert len(results) == 1
     p_normalized = results[0]
     assert p_normalized.product_name == "Reg Paneer 100g"
     assert p_normalized.price == 50.0
-    assert p_normalized.price_freshness == "CACHED"
+    assert p_normalized.price_freshness == "DEMO"
     assert isinstance(p_normalized.retrieved_at, datetime)
 
     # Test single product details lookup
-    details = loop.run_until_complete(provider.get_product_details(product.id))
+    details = asyncio.run(provider.get_product_details(product.id))
     assert details is not None
     assert details.product_name == "Reg Paneer 100g"
     assert details.price == 50.0

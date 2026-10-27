@@ -1,0 +1,127 @@
+{
+  "generated_at": "2026-10-18T14:16:29Z",
+  "models": {
+    "tfidf_recommender": {
+      "model": "TF-IDF + Cosine Similarity",
+      "algorithm_type": "Classical NLP / Information Retrieval",
+      "recipes_indexed": 15,
+      "vocabulary_size": 377,
+      "self_retrieval_accuracy_pct": 100.0,
+      "precision_at_5_pct": 65.0,
+      "avg_top1_similarity": 0.2952,
+      "n_test_queries": 20,
+      "hits_at_5": 13
+    },
+    "sentence_transformer_matcher": {
+      "model": "all-MiniLM-L6-v2 (SentenceTransformer)",
+      "algorithm_type": "Pre-trained transformer \u2014 semantic similarity",
+      "embedding_dimension": 384,
+      "match_threshold": 0.4,
+      "n_test_pairs": 10,
+      "match_accuracy_pct": 100.0,
+      "avg_similarity": 0.5033,
+      "note": "Pre-trained HuggingFace model \u2014 not fine-tuned on DishIQ data"
+    },
+    "random_forest_suitability": {
+      "model": "RandomForestRegressor",
+      "algorithm_type": "Supervised ML \u2014 Ensemble of Decision Trees",
+      "model_name": "DishIQ Recipe Suitability \u2014 RandomForestRegressor",
+      "model_version": "1.0.0",
+      "algorithm": "RandomForestRegressor",
+      "purpose": "General recipe quality prediction using structural features",
+      "label_source": "Food.com rating distribution (proxy) + real DishIQ feedback",
+      "proxy_label_note": "Most ratings sampled from Food.com distribution (mean=4.57, std=0.96). Explicitly documented as proxy labels.",
+      "split_strategy": "70/15/15 train/val/test",
+      "random_seed": 42,
+      "n_estimators": 100,
+      "max_depth": 10,
+      "min_samples_leaf": 5,
+      "n_training_samples": 718,
+      "feature_names": [
+        "prep_time",
+        "cook_time",
+        "total_time",
+        "servings",
+        "ingredient_count",
+        "avg_rating",
+        "is_vegetarian",
+        "is_vegan",
+        "is_non_vegetarian",
+        "is_standard",
+        "cuisine_encoded"
+      ],
+      "validation_metrics": {
+        "MAE": 0.6187,
+        "RMSE": 0.749,
+        "R2": -0.1155
+      },
+      "test_metrics": {
+        "MAE": 0.5259,
+        "RMSE": 0.632,
+        "R2": -0.0305
+      },
+      "feature_importances": {
+        "prep_time": 0.0003141010447208724,
+        "cook_time": 0.26009201018343253,
+        "total_time": 0.2839141316441076,
+        "servings": 0.0,
+        "ingredient_count": 0.3869951014378817,
+        "avg_rating": 9.602500531763929e-05,
+        "is_vegetarian": 0.019364212909468187,
+        "is_vegan": 0.010163701923869273,
+        "is_non_vegetarian": 0.0,
+        "is_standard": 0.038812029835169064,
+        "cuisine_encoded": 0.00024868601603312727
+      },
+      "training_duration_seconds": 0.12,
+      "training_timestamp": "2026-09-19T16:12:53Z"
+    },
+    "kmeans_clustering": {
+      "model": "K-Means",
+      "algorithm_type": "Unsupervised ML \u2014 Clustering",
+      "model_name": "DishIQ Recipe Clusterer \u2014 K-Means",
+      "model_version": "1.0.0",
+      "algorithm": "K-Means (sklearn)",
+      "purpose": "Unsupervised recipe grouping by structural characteristics",
+      "best_k": 6,
+      "best_silhouette_score": 0.5691,
+      "silhouette_by_k": {
+        "4": 0.5658,
+        "5": 0.5684,
+        "6": 0.5691
+      },
+      "k_candidates_tried": [
+        4,
+        5,
+        6
+      ],
+      "n_recipes": 1026,
+      "feature_names": [
+        "prep_time",
+        "cook_time",
+        "total_time",
+        "servings",
+        "ingredient_count",
+        "avg_rating"
+      ],
+      "cluster_descriptions": {
+        "0": "Moderate time, medium servings, moderate complexity, highly rated",
+        "1": "Long cooking, medium servings, moderate complexity, highly rated",
+        "2": "Quick, large servings, few ingredients, highly rated",
+        "3": "Long cooking, medium servings, moderate complexity, highly rated",
+        "4": "Long cooking, medium servings, many ingredients, highly rated",
+        "5": "Quick, medium servings, few ingredients, highly rated"
+      },
+      "cluster_sizes": {
+        "0": 624,
+        "1": 4,
+        "2": 10,
+        "3": 1,
+        "4": 382,
+        "5": 5
+      },
+      "random_seed": 42,
+      "training_timestamp": "2026-09-19T16:12:59Z"
+    }
+  }
+}

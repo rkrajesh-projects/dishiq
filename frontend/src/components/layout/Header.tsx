@@ -1,14 +1,20 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Utensils, Search, ShoppingBag, ChefHat, Package, User, Wifi, WifiOff } from 'lucide-react';
+import { Utensils, Search, ShoppingBag, ChefHat, Package, User, Wifi, WifiOff, Calendar } from 'lucide-react';
 import { useBackendStatus } from '../../hooks/useBackendStatus';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export const Header: React.FC = () => {
   const { isConnected, isPending } = useBackendStatus();
+  const { isAuthenticated, user, logout } = useAuth();
+  const navigate = useNavigate();
+  const handleLogout = () => { logout(); navigate('/login'); };
 
   const navItems = [
     { label: 'Home', path: '/', icon: Utensils },
     { label: 'Recipes', path: '/recipes', icon: Search },
+    { label: 'Meal Plan', path: '/meal-plan', icon: Calendar },
     { label: 'Grocery', path: '/grocery', icon: ShoppingBag },
     { label: 'Cooking', path: '/cooking', icon: ChefHat },
     { label: 'Pantry', path: '/pantry', icon: Package },
@@ -60,6 +66,11 @@ export const Header: React.FC = () => {
 
           {/* Backend Connection Status Badge */}
           <div className="flex items-center gap-3">
+            {isAuthenticated ? (
+              <div className="flex items-center gap-2">{user?.full_name && (<span className="text-xs font-medium text-gray-500 hidden sm:inline" data-testid="user-greeting">{user.full_name}</span>)}<button onClick={handleLogout} className="text-xs font-semibold text-gray-600 hover:text-emerald-700">Logout</button></div>
+            ) : (
+              <NavLink to="/login" className="text-xs font-semibold text-gray-600 hover:text-emerald-700">Sign in</NavLink>
+            )}
             <div
               data-testid="backend-status"
               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all ${

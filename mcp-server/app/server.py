@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
-import mcp_types as types
+import mcp.types as types
 from mcp.server import Server, InitializationOptions
 from mcp.server.stdio import stdio_server
 from app.config import settings

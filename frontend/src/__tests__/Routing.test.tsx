@@ -26,7 +26,7 @@ describe('Routing Integration', () => {
 
   it('renders RecipeSearchPage on "/recipes" route', () => {
     renderWithRouter(['/recipes']);
-    expect(screen.getByText('Recipe Search & Smart Ranking')).toBeInTheDocument();
+    expect(screen.getByText('Recipe Finder')).toBeInTheDocument();
   });
 
   it('renders NotFoundPage on unknown route', () => {

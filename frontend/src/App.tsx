@@ -1,20 +1,13 @@
 import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { AppRoutes } from './routes/AppRoutes';
+import { AuthProvider } from './context/AuthContext';
 import { ErrorState } from './components/common/ErrorState';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
+import { queryClient } from './api/queryClient';
 
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   return (
@@ -37,6 +30,7 @@ export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary FallbackComponent={ErrorFallback} onError={handleBoundaryError}>
+        <AuthProvider>
         <BrowserRouter>
           <div className="min-h-screen flex flex-col justify-between bg-cream-100 text-brand-dark">
             <Header />
@@ -46,6 +40,7 @@ export const App: React.FC = () => {
             <Footer />
           </div>
         </BrowserRouter>
+        </AuthProvider>
       </ErrorBoundary>
     </QueryClientProvider>
   );

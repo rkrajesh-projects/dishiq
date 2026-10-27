@@ -1,22 +1,48 @@
 import React, { useState, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChefHat, ArrowLeft, ChevronLeft, ChevronRight, CheckCircle, RotateCcw, List, Check, Star, AlertCircle } from 'lucide-react';
+import {
+  ChefHat,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle,
+  RotateCcw,
+  List,
+  Check,
+  Star,
+  AlertCircle,
+  Pause,
+  Play,
+  CheckSquare,
+  Package,
+  X,
+  Clock,
+  Sparkles,
+} from 'lucide-react';
 import { PageContainer } from '../components/common/PageContainer';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { Button } from '../components/common/Button';
 import { getRecipe } from '../api/recipes';
 import { CookingTimerCard } from '../components/recipe/CookingTimerCard';
+import { CookingCompanionCard } from '../components/recipe/CookingCompanionCard';
 import { StepIngredientsCard } from '../components/recipe/StepIngredientsCard';
+import { PreparationChecklistCard } from '../components/recipe/PreparationChecklistCard';
 import { matchStepIngredients } from '../utils/stepIngredientMatcher';
 import {
   useCookingSession,
   useNextStep,
   usePreviousStep,
-  useCompleteSession
+  useCompleteSession,
+  usePauseSession,
+  useResumeSession,
+  usePreparationChecklist,
+  useUpdatePreparedIngredients,
 } from '../hooks/useCooking';
 import { useSubmitRecipeFeedback } from '../hooks/useFeedback';
+import { usePreviewConsumption, useConfirmConsumption } from '../hooks/usePantry';
+import { ConsumptionPreviewResponse } from '../types';
 
 export interface CookingStep {
   index: number;
@@ -128,6 +154,14 @@ export const CookingPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
 
+  // Search params for mode (prep vs cooking)
+  const [searchParams] = useSearchParams();
+  const initialMode = searchParams.get('mode') === 'prep' ? 'prep' : 'cooking';
+  const [activeView, setActiveView] = useState<'cooking' | 'prep'>(initialMode);
+
+  // Phase 12: Sidebar Tab Switcher (AI Cooking Companion vs Ingredients Reference)
+  const [sidebarTab, setSidebarTab] = useState<'ingredients' | 'companion'>('ingredients');
+
   // Timer running status to warn before step change or completion
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
@@ -185,17 +219,62 @@ export const CookingPage: React.FC = () => {
     enabled: Boolean(recipeId),
   });
 
+  const baseServings = recipe?.servings || 4;
+  const effectiveServings = session?.servings || baseServings;
+  const scaleFactor = baseServings > 0 ? effectiveServings / baseServings : 1;
+
   // 3. Navigation Mutations
   const nextMutation = useNextStep(sessionId || '');
   const prevMutation = usePreviousStep(sessionId || '');
   const completeMutation = useCompleteSession(sessionId || '');
 
-  // 4. Feedback mutation — must be declared here unconditionally (Rules of Hooks).
-  //    recipe?.id may be undefined during loading; the mutation is only .mutate()-d
-  //    after the recipe has been confirmed to exist (inside handleSubmitFeedback).
+  // 4. Phase 10: Pause & Resume and Preparation Checklist hooks
+  const pauseMutation = usePauseSession(sessionId || '');
+  const resumeMutation = useResumeSession(sessionId || '');
+  const { data: checklist, isLoading: checklistLoading } = usePreparationChecklist(sessionId || '');
+  const updatePreparedMutation = useUpdatePreparedIngredients(sessionId || '');
+
+  const handleTogglePrepared = (ingredientKey: string) => {
+    if (!session) return;
+    const current = new Set(session.prepared_ingredients || []);
+    if (current.has(ingredientKey)) {
+      current.delete(ingredientKey);
+    } else {
+      current.add(ingredientKey);
+    }
+    updatePreparedMutation.mutate(Array.from(current));
+  };
+
+  const handleMarkAllPrepared = () => {
+    if (!checklist) return;
+    const allKeys = checklist.items.map((it) => it.name || it.id);
+    updatePreparedMutation.mutate(allKeys);
+  };
+
+  const handlePause = () => {
+    pauseMutation.mutate(undefined, {
+      onError: () => setNavError('Could not pause cooking session.'),
+    });
+  };
+
+  const handleResume = () => {
+    resumeMutation.mutate(undefined, {
+      onError: () => setNavError('Could not resume cooking session.'),
+    });
+  };
+
+  // 5. Feedback mutation — must be declared here unconditionally (Rules of Hooks).
   const feedbackMutation = useSubmitRecipeFeedback(recipeId || '');
 
-  const isNavigating = nextMutation.isPending || prevMutation.isPending || completeMutation.isPending;
+  // 6. Phase 11: Explicit Pantry Consumption hooks
+  const previewConsumptionMutation = usePreviewConsumption();
+  const confirmConsumptionMutation = useConfirmConsumption();
+  const [consumptionPreview, setConsumptionPreview] = useState<ConsumptionPreviewResponse | null>(null);
+  const [showConsumptionModal, setShowConsumptionModal] = useState(false);
+  const [consumptionConfirmed, setConsumptionConfirmed] = useState(false);
+  const [consumptionError, setConsumptionError] = useState<string | null>(null);
+
+  const isNavigating = nextMutation.isPending || prevMutation.isPending || completeMutation.isPending || pauseMutation.isPending || resumeMutation.isPending;
 
   // Focus step heading on step change (Phase 9.9)
   React.useEffect(() => {
@@ -494,7 +573,190 @@ export const CookingPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Phase 11: Explicit Pantry Inventory Deduction Review */}
+          <div className="border-t border-gray-100 pt-6 mt-6 text-left bg-emerald-50/40 rounded-2xl p-5 border border-emerald-100/60">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-emerald-700" />
+                <h3 className="text-sm font-bold text-gray-900">Pantry Inventory Tracking</h3>
+              </div>
+              {consumptionConfirmed ? (
+                <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Stock Updated
+                </span>
+              ) : (
+                <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                  Optional
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+              {consumptionConfirmed
+                ? "Ingredients used for this cooking session have been deducted from your pantry stock."
+                : "Would you like to deduct the ingredients used in this recipe from your pantry inventory?"}
+            </p>
+
+            {!consumptionConfirmed && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                icon={<Package className="w-3.5 h-3.5 text-emerald-600" />}
+                onClick={() => {
+                  setConsumptionError(null);
+                  previewConsumptionMutation.mutate(
+                    {
+                      recipe_id: recipe.id,
+                      cooking_session_id: session?.id,
+                      servings: effectiveServings,
+                    },
+                    {
+                      onSuccess: (data) => {
+                        setConsumptionPreview(data);
+                        setShowConsumptionModal(true);
+                      },
+                      onError: () => {
+                        setConsumptionError('Could not load consumption preview.');
+                      },
+                    }
+                  );
+                }}
+                isLoading={previewConsumptionMutation.isPending}
+              >
+                Review & Deduct Pantry Stock
+              </Button>
+            )}
+
+            {consumptionError && (
+              <p className="text-[11px] text-red-600 font-semibold mt-2">{consumptionError}</p>
+            )}
+          </div>
         </div>
+
+        {/* Phase 11: Consumption Confirmation Modal */}
+        {showConsumptionModal && consumptionPreview && (
+          <div
+            className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Review Pantry Deductions"
+          >
+            <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Package className="w-5 h-5 text-emerald-700" />
+                  <h2 className="font-bold text-gray-900 text-lg">Pantry Deductions Review</h2>
+                </div>
+                <button
+                  onClick={() => setShowConsumptionModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label="Close modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-600 mb-4">
+                Review ingredients required for <strong>{effectiveServings} servings</strong> against your current pantry stock. Unmatched or incompatible items will not be deducted.
+              </p>
+
+              <div className="space-y-2 mb-5">
+                {consumptionPreview.items.map((it, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-3 ${
+                      it.can_deduct
+                        ? 'border-emerald-100 bg-emerald-50/30'
+                        : 'border-gray-100 bg-gray-50/50 text-gray-500'
+                    }`}
+                  >
+                    <div>
+                      <span className="font-bold text-gray-900 capitalize block">{it.ingredient_name}</span>
+                      <span className="text-[11px] text-gray-500">
+                        Recipe requires: {it.required_quantity} {it.required_unit}
+                      </span>
+                      {it.pantry_item_id && (
+                        <span className="text-[11px] text-emerald-700 block">
+                          Pantry has: {it.pantry_quantity} {it.pantry_unit} → Deduct: {it.converted_deduct_quantity} {it.pantry_unit}
+                        </span>
+                      )}
+                      {it.reason && (
+                        <span className="text-[10px] text-amber-700 block mt-0.5 italic">
+                          {it.reason}
+                        </span>
+                      )}
+                    </div>
+
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                        it.status === 'fully_covered'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : it.status === 'partially_covered'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {it.status === 'fully_covered'
+                        ? 'Fully Covered'
+                        : it.status === 'partially_covered'
+                        ? 'Partial Stock'
+                        : it.status === 'incompatible_unit'
+                        ? 'Incompatible Unit'
+                        : 'Not in Stock'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-3 pt-2 border-t border-gray-100">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowConsumptionModal(false)}
+                  className="flex-1"
+                >
+                  Skip / Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={consumptionPreview.total_deductible_items === 0 || confirmConsumptionMutation.isPending}
+                  isLoading={confirmConsumptionMutation.isPending}
+                  onClick={() => {
+                    const deductibleItems = consumptionPreview.items
+                      .filter((it) => it.can_deduct && it.pantry_item_id)
+                      .map((it) => ({
+                        pantry_item_id: it.pantry_item_id!,
+                        deduct_quantity: it.converted_deduct_quantity,
+                      }));
+
+                    confirmConsumptionMutation.mutate(
+                      {
+                        preview_token: consumptionPreview.preview_token,
+                        recipe_id: recipe.id,
+                        cooking_session_id: session?.id,
+                        items: deductibleItems,
+                      },
+                      {
+                        onSuccess: () => {
+                          setConsumptionConfirmed(true);
+                          setShowConsumptionModal(false);
+                        },
+                        onError: (err: any) => {
+                          setConsumptionError(err?.response?.data?.detail || 'Failed to update pantry stock.');
+                        },
+                      }
+                    );
+                  }}
+                  className="flex-1"
+                >
+                  Confirm & Deduct Stock ({consumptionPreview.total_deductible_items})
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </PageContainer>
     );
   }
@@ -566,20 +828,93 @@ export const CookingPage: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           {/* Header Card */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-2 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit">
-              <ChefHat className="w-3.5 h-3.5" />
-              <span>DishIQ Cooking Assistant</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full w-fit">
+                    <ChefHat className="w-3.5 h-3.5" />
+                    <span>DishIQ Cooking Assistant</span>
+                  </div>
+                  {session?.status === 'paused' && (
+                    <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <Pause className="w-3 h-3" /> Paused
+                    </span>
+                  )}
+                </div>
+                <h1 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                  {recipe.name}
+                </h1>
+                <p className="text-xs text-gray-500 mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                  <span>{recipe.cuisine} Cuisine</span>
+                  <span>•</span>
+                  <span>Serves {effectiveServings}{effectiveServings !== baseServings ? ` (scaled from ${baseServings})` : ''}</span>
+                  <span>•</span>
+                  <span>Time: {(recipe.preparation_minutes || 0) + (recipe.cooking_minutes || 0)} mins</span>
+                </p>
+              </div>
+
+              {/* Pause / Resume Controls */}
+              <div className="flex items-center gap-2 shrink-0">
+                {session?.status === 'paused' ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<Play className="w-4 h-4" />}
+                    onClick={handleResume}
+                    isLoading={resumeMutation.isPending}
+                    aria-label="Resume cooking"
+                  >
+                    Resume Cooking
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<Pause className="w-4 h-4" />}
+                    onClick={handlePause}
+                    isLoading={pauseMutation.isPending}
+                    aria-label="Pause cooking"
+                  >
+                    Pause
+                  </Button>
+                )}
+              </div>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-              {recipe.name}
-            </h1>
-            <p className="text-xs text-gray-500 mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-              <span>{recipe.cuisine} Cuisine</span>
-              <span>•</span>
-              <span>Serves {recipe.servings}</span>
-              <span>•</span>
-              <span>Time: {(recipe.preparation_minutes || 0) + (recipe.cooking_minutes || 0)} mins</span>
-            </p>
+
+            {/* View Switcher: Cooking Steps vs Preparation Checklist */}
+            <div className="flex items-center gap-3 border-t border-gray-100 pt-4 mt-4">
+              <button
+                type="button"
+                onClick={() => setActiveView('cooking')}
+                className={`text-xs font-bold transition-all px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 ${
+                  activeView === 'cooking'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <ChefHat className="w-3.5 h-3.5" />
+                <span>Cooking Steps</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('prep')}
+                className={`text-xs font-bold transition-all px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 ${
+                  activeView === 'prep'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                <span>Preparation Checklist</span>
+                {checklist && (
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                    activeView === 'prep' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {checklist.prepared_count}/{checklist.total_ingredients}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Inline navigation error banner (Phase 9.10) */}
@@ -601,7 +936,19 @@ export const CookingPage: React.FC = () => {
             </div>
           )}
 
-          {/* Step Progress bar */}
+          {/* Conditional View: Preparation Checklist vs Step-by-Step Cooking */}
+          {activeView === 'prep' ? (
+            <PreparationChecklistCard
+              checklist={checklist}
+              isLoading={checklistLoading}
+              onToggleIngredient={handleTogglePrepared}
+              onMarkAllPrepared={handleMarkAllPrepared}
+              onContinueToCooking={() => setActiveView('cooking')}
+              isUpdating={updatePreparedMutation.isPending}
+            />
+          ) : (
+            <>
+              {/* Step Progress bar */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-2">
             <div className="flex items-center justify-between text-xs font-bold text-gray-700">
               <span>Step {currentStepIndex + 1} of {totalSteps}</span>
@@ -753,51 +1100,96 @@ export const CookingPage: React.FC = () => {
               })}
             </ol>
           </div>
+            </>
+          )}
         </div>
 
-        {/* Sidebar panel for Ingredient Reference */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-            <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <List className="w-4 h-4 text-emerald-600" />
-              <span>Recipe Ingredients Reference</span>
-            </h3>
-            <ul className="space-y-3" aria-label="Recipe ingredients reference list">
-              {recipe.ingredients && recipe.ingredients.map((ri, index) => {
-                const isHighlighted = stepIngredients.some(si => si.id === ri.id);
-                const itemAria = isHighlighted 
-                  ? `${ri.ingredient?.canonical_name || 'Ingredient'}, relevant to current step`
-                  : ri.ingredient?.canonical_name || 'Ingredient';
-
-                return (
-                  <li
-                    key={ri.id || index}
-                    className={`text-xs p-2.5 rounded-lg border flex flex-col gap-0.5 transition-all duration-200 ${
-                      isHighlighted 
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-950 font-medium ring-2 ring-emerald-100/50'
-                        : 'text-gray-700 bg-gray-50 border-gray-100'
-                    }`}
-                    aria-label={itemAria}
-                  >
-                    <span className="font-semibold capitalize flex items-center justify-between">
-                      <span>{ri.ingredient?.canonical_name || 'Ingredient'}</span>
-                      {isHighlighted && (
-                        <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                          Current Step
-                        </span>
-                      )}
-                    </span>
-                    <span className={`text-[10px] ${isHighlighted ? 'text-emerald-700' : 'text-gray-500'}`}>
-                      Quantity: {ri.quantity} {ri.unit} {ri.preparation_note ? `(${ri.preparation_note})` : ''}
-                    </span>
-                    <span className={`text-[10px] italic ${isHighlighted ? 'text-emerald-600/70' : 'text-gray-400'}`}>
-                      {ri.raw_text}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+        {/* Sidebar panel with Tab Switching: AI Cooking Companion vs Ingredients Reference */}
+        <div className="lg:col-span-1 space-y-4">
+          <div className="flex items-center gap-1.5 p-1 bg-gray-100/80 rounded-xl border border-gray-200/60">
+            <button
+              type="button"
+              onClick={() => setSidebarTab('companion')}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                sidebarTab === 'companion'
+                  ? 'bg-white text-emerald-900 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              aria-label="Show AI Cooking Companion"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span>AI Companion</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarTab('ingredients')}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                sidebarTab === 'ingredients'
+                  ? 'bg-white text-emerald-900 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              aria-label="Show Recipe Ingredients Reference"
+            >
+              <List className="w-3.5 h-3.5 text-gray-500" />
+              <span>Ingredients</span>
+            </button>
           </div>
+
+          {sidebarTab === 'companion' ? (
+            <CookingCompanionCard
+              sessionId={session?.id || sessionId || ''}
+              recipeName={recipe.name}
+              currentStepIndex={currentStepIndex}
+              totalSteps={totalSteps}
+              currentInstruction={currentStep?.instruction}
+            />
+          ) : (
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+              <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <List className="w-4 h-4 text-emerald-600" />
+                <span>Recipe Ingredients Reference</span>
+              </h3>
+              <ul className="space-y-3" aria-label="Recipe ingredients reference list">
+                {recipe.ingredients && recipe.ingredients.map((ri, index) => {
+                  const isHighlighted = stepIngredients.some(si => si.id === ri.id);
+                  const itemAria = isHighlighted 
+                    ? `${ri.ingredient?.canonical_name || 'Ingredient'}, relevant to current step`
+                    : ri.ingredient?.canonical_name || 'Ingredient';
+
+                  const scaledQty = (ri.quantity !== null && ri.quantity !== undefined && scaleFactor !== 1)
+                    ? Math.round(ri.quantity * scaleFactor * 100) / 100
+                    : ri.quantity;
+
+                  return (
+                    <li
+                      key={ri.id || index}
+                      className={`text-xs p-2.5 rounded-lg border flex flex-col gap-0.5 transition-all duration-200 ${
+                        isHighlighted 
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-950 font-medium ring-2 ring-emerald-100/50'
+                          : 'text-gray-700 bg-gray-50 border-gray-100'
+                      }`}
+                      aria-label={itemAria}
+                    >
+                      <span className="font-semibold capitalize flex items-center justify-between">
+                        <span>{ri.ingredient?.canonical_name || 'Ingredient'}</span>
+                        {isHighlighted && (
+                          <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                            Current Step
+                          </span>
+                        )}
+                      </span>
+                      <span className={`text-[10px] ${isHighlighted ? 'text-emerald-700' : 'text-gray-500'}`}>
+                        Quantity: {scaledQty} {ri.unit} {ri.preparation_note ? `(${ri.preparation_note})` : ''}
+                      </span>
+                      <span className={`text-[10px] italic ${isHighlighted ? 'text-emerald-600/70' : 'text-gray-400'}`}>
+                        {ri.raw_text}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
     </PageContainer>

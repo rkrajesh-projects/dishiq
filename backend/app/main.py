@@ -5,6 +5,7 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import RequestLoggingMiddleware, logger
+from app.core.middleware import RequestSizeLimitMiddleware
 from app.db.session import init_db
 
 
@@ -50,6 +51,14 @@ async def lifespan(app: FastAPI):
     # Preload the SentenceTransformer model so the first API request is fast
     _preload_sentence_transformer()
 
+    # Preload all ML models (TF-IDF, RF Suitability, K-Means)
+    try:
+        from app.services.ml_service import MLService
+        MLService.get_instance()
+        logger.info("ML models preloaded successfully.")
+    except Exception as exc:
+        logger.warning(f"ML model preload failed (will lazy-load on first request): {exc}")
+
     yield
     logger.info(f"Shutting down {settings.APP_NAME}...")
 
@@ -76,6 +85,9 @@ def create_application() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Configure Request Size Limit Middleware (abuse & memory protection)
+    app.add_middleware(RequestSizeLimitMiddleware)
+
     # Configure Request Logging Middleware
     app.add_middleware(RequestLoggingMiddleware)
 
@@ -83,7 +95,11 @@ def create_application() -> FastAPI:
     register_exception_handlers(app)
 
     # Include Main API Router
-    app.include_router(api_router, prefix="/api")
+    app.include_router(api_router, prefix=settings.API_V1_STR)
+    if settings.API_V1_STR != "/api":
+        app.include_router(api_router, prefix="/api")
+    if settings.API_V1_STR != "/api/v1":
+        app.include_router(api_router, prefix="/api/v1")
 
     return app
 

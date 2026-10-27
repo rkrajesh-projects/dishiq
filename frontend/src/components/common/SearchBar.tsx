@@ -3,6 +3,7 @@ import { Search, Sparkles } from 'lucide-react';
 import { Button } from './Button';
 
 export interface SearchBarProps {
+  initialValue?: string;
   onSearch?: (query: string) => void;
   placeholder?: string;
   large?: boolean;
@@ -12,8 +13,10 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   onSearch,
   placeholder = "Search recipes by dish, ingredient or craving...",
   large = false,
+  initialValue = "",
 }) => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialValue);
+  React.useEffect(() => { setQuery(initialValue); }, [initialValue]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

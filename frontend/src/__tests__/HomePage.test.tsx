@@ -39,6 +39,7 @@ vi.mock('../hooks/useCooking', () => ({
 // Mock recipe details fetch
 vi.mock('../api/recipes', () => ({
   getRecipe: vi.fn(),
+  getRecipeByName: vi.fn(),
 }));
 
 const renderHomePage = () => {
@@ -58,6 +59,13 @@ const renderHomePage = () => {
 describe('HomePage Resume Cooking Spotlight (Phase 9.8)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    (recipesApi.getRecipeByName as any).mockImplementation(async (name: string) => {
+      if (name === 'Paneer Bhurji') {
+        return { id: 'recipe-789', name: 'Paneer Bhurji' };
+      }
+      return { id: `recipe-${name.replace(/\s+/g, '-').toLowerCase()}`, name };
+    });
 
     (profileHooks.useProfile as any).mockReturnValue({
       data: {
@@ -108,7 +116,7 @@ describe('HomePage Resume Cooking Spotlight (Phase 9.8)', () => {
 
     (recipesApi.getRecipe as any).mockResolvedValue({
       id: 'recipe-789',
-      name: 'Paneer Butter Masala',
+      name: 'Paneer Bhurji',
       instructions: ['Step 1', 'Step 2', 'Step 3', 'Step 4'],
     });
 
@@ -117,8 +125,8 @@ describe('HomePage Resume Cooking Spotlight (Phase 9.8)', () => {
     // Verify the resume card is loaded by waiting for the unique "Continue Cooking" heading
     expect(await screen.findByText(/Continue Cooking/i)).toBeInTheDocument();
 
-    // Paneer Butter Masala appears in both popular dishes chips and the resume card
-    const titleElements = screen.getAllByText('Paneer Butter Masala');
+    // Paneer Bhurji appears in both popular dishes chips and the resume card
+    const titleElements = screen.getAllByText('Paneer Bhurji');
     expect(titleElements.length).toBeGreaterThan(1);
 
     // Verify current step info (2 is 0-indexed, meaning step 3)
@@ -139,7 +147,7 @@ describe('HomePage Resume Cooking Spotlight (Phase 9.8)', () => {
 
     (recipesApi.getRecipe as any).mockResolvedValue({
       id: 'recipe-789',
-      name: 'Paneer Butter Masala',
+      name: 'Paneer Bhurji',
       instructions: ['Step 1', 'Step 2', 'Step 3', 'Step 4'],
     });
 

@@ -101,7 +101,7 @@ describe('Grocery API Integration Safeguards', () => {
   it('compareGroceryPrices calls /grocery/compare with encoded ingredient and returns typed response', async () => {
     const data = await compareGroceryPrices({ ingredient: 'paneer' });
     expect(apiClient.get).toHaveBeenCalledWith('/grocery/compare', {
-      params: { ingredient: 'paneer' },
+      params: { ingredient: 'paneer', live_mode: false },
     });
     expect(data.best_option).not.toBeNull();
     expect(data.best_option?.store_name).toBe('Demo QuickMart');

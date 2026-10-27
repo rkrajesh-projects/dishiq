@@ -1,15 +1,68 @@
-import React, { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingCart, RefreshCw, AlertTriangle, Info, Trophy, Split, Clock, CheckCircle } from 'lucide-react';
+import { ShoppingCart, RefreshCw, AlertTriangle, Info, Trophy, Split, Clock, CheckCircle, ChefHat, ExternalLink } from 'lucide-react';
 import { getRecipeIngredients } from '../../api/ingredients';
 import { useCartOptimize } from '../../hooks/useCartOptimization';
+import { useStartCooking, useActiveCookingSession } from '../../hooks/useCooking';
+import { usePantryItems } from '../../hooks/usePantry';
 import { formatINR } from '../../utils/currency';
 import { CartIngredientRequest } from '../../types/cart';
+import { PriceComparisonCard } from './PriceComparisonCard';
+import { CartOptimizeResponse } from '../../types';
 
-export const CartOptimizationPanel: React.FC = () => {
+export interface CartOptimizationPanelProps {
+  onOptimizationResult?: (result: CartOptimizeResponse) => void;
+  defaultLiveMode?: boolean;
+}
+
+export const CartOptimizationPanel: React.FC<CartOptimizationPanelProps> = ({
+  onOptimizationResult,
+  defaultLiveMode = false,
+}) => {
   const [searchParams] = useSearchParams();
   const recipeId = searchParams.get('recipeId') || '';
+  const servingsParam = searchParams.get('servings');
+  const baseServingsParam = searchParams.get('baseServings');
+  const servings = servingsParam ? parseFloat(servingsParam) : null;
+  const baseServings = baseServingsParam ? parseFloat(baseServingsParam) : null;
+  const scaleFactor = (servings && baseServings && baseServings > 0) ? (servings / baseServings) : 1;
+
+  const [budgetCap, setBudgetCap] = useState<string>('');
+  const [isLiveMode, setIsLiveMode] = useState<boolean>(defaultLiveMode);
+  const [deductPantry, setDeductPantry] = useState<boolean>(true);
+
+  const navigate = useNavigate();
+  const startCookingMutation = useStartCooking();
+  const { data: activeSession } = useActiveCookingSession(recipeId || undefined);
+  const { data: pantryItems } = usePantryItems();
+
+  const pantrySet = React.useMemo(() => {
+    const set = new Set<string>();
+    if (pantryItems && Array.isArray(pantryItems)) {
+      for (const item of pantryItems) {
+        if (item.canonical_name) set.add(item.canonical_name.toLowerCase().trim());
+        if (item.ingredient_name) set.add(item.ingredient_name.toLowerCase().trim());
+        if (item.custom_name) set.add(item.custom_name.toLowerCase().trim());
+      }
+    }
+    return set;
+  }, [pantryItems]);
+
+  const isIngredientInPantry = React.useCallback(
+    (canonicalName: string, displayName?: string) => {
+      if (pantrySet.size === 0) return false;
+      const can = (canonicalName || '').toLowerCase().trim();
+      const disp = (displayName || '').toLowerCase().trim();
+      if (pantrySet.has(can) || pantrySet.has(disp)) return true;
+      for (const p of pantrySet) {
+        if (can && (can === p || can.includes(p) || p.includes(can))) return true;
+        if (disp && (disp === p || disp.includes(p) || p.includes(disp))) return true;
+      }
+      return false;
+    },
+    [pantrySet]
+  );
 
   // Get recipe ingredients if recipeId is available
   const {
@@ -29,28 +82,79 @@ export const CartOptimizationPanel: React.FC = () => {
     isPending: isOptimizePending,
     isError: isOptimizeError,
     error: optimizeError,
-  } = useCartOptimize();
+  } = useCartOptimize(isLiveMode);
+
+  const { coveredByPantry, itemsToOptimize } = React.useMemo(() => {
+    const results = ingredientsData?.results || [];
+    if (!deductPantry || pantrySet.size === 0) {
+      return { coveredByPantry: [], itemsToOptimize: results };
+    }
+    const covered: typeof results = [];
+    const toOpt: typeof results = [];
+    for (const ing of results) {
+      if (isIngredientInPantry(ing.canonical_name, ing.display_name)) {
+        covered.push(ing);
+      } else {
+        toOpt.push(ing);
+      }
+    }
+    return { coveredByPantry: covered, itemsToOptimize: toOpt };
+  }, [ingredientsData?.results, deductPantry, pantrySet, isIngredientInPantry]);
+
+  const handleStartCooking = () => {
+    if (!recipeId) return;
+    if (activeSession && activeSession.status !== 'completed') {
+      navigate(`/cooking/${activeSession.id}`);
+      return;
+    }
+    startCookingMutation.mutate(
+      { recipe_id: recipeId, servings: servings || undefined },
+      {
+        onSuccess: (session) => {
+          navigate(`/cooking/${session.id}`);
+        },
+        onError: () => {
+          navigate(`/cooking/${recipeId}`);
+        },
+      }
+    );
+  };
 
   // Trigger optimization automatically when ingredients are fetched
   useEffect(() => {
-    if (ingredientsData?.results && ingredientsData.results.length > 0) {
-      const ingredientsList: CartIngredientRequest[] = ingredientsData.results.map((ing) => ({
-        ingredient_name: ing.canonical_name,
-        required_quantity: ing.quantity || 1.0,
-        required_unit: ing.unit || 'piece',
-      }));
-      optimize({ ingredients: ingredientsList });
+    if (itemsToOptimize.length > 0) {
+      const ingredientsList: CartIngredientRequest[] = itemsToOptimize.map((ing) => {
+        const rawQty = ing.quantity || 1.0;
+        const scaledQty = Math.round(rawQty * scaleFactor * 100) / 100;
+        return {
+          ingredient_name: ing.canonical_name,
+          required_quantity: scaledQty,
+          required_unit: ing.unit || 'piece',
+        };
+      });
+      optimize({ ingredients: ingredientsList, budget_cap: budgetCap ? parseFloat(budgetCap) : undefined });
     }
-  }, [ingredientsData, optimize]);
+  }, [itemsToOptimize, optimize, scaleFactor]);
+
+  // Pass result up to parent if callback is provided
+  useEffect(() => {
+    if (optimizeResult && onOptimizationResult) {
+      onOptimizationResult(optimizeResult);
+    }
+  }, [optimizeResult, onOptimizationResult]);
 
   const handleOptimize = () => {
-    if (ingredientsData?.results && ingredientsData.results.length > 0) {
-      const ingredientsList: CartIngredientRequest[] = ingredientsData.results.map((ing) => ({
-        ingredient_name: ing.canonical_name,
-        required_quantity: ing.quantity || 1.0,
-        required_unit: ing.unit || 'piece',
-      }));
-      optimize({ ingredients: ingredientsList });
+    if (itemsToOptimize.length > 0) {
+      const ingredientsList: CartIngredientRequest[] = itemsToOptimize.map((ing) => {
+        const rawQty = ing.quantity || 1.0;
+        const scaledQty = Math.round(rawQty * scaleFactor * 100) / 100;
+        return {
+          ingredient_name: ing.canonical_name,
+          required_quantity: scaledQty,
+          required_unit: ing.unit || 'piece',
+        };
+      });
+      optimize({ ingredients: ingredientsList, budget_cap: budgetCap ? parseFloat(budgetCap) : undefined });
     }
   };
 
@@ -107,12 +211,21 @@ export const CartOptimizationPanel: React.FC = () => {
   return (
     <div className="space-y-6" data-testid="cart-optimization-panel">
       {/* Disclaimer */}
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800 flex items-start gap-2.5 shadow-xs">
-        <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-        <div>
-          <span className="font-bold">Demonstration Notice:</span> All store prices and delivery fees are generated from fallback demonstration retail datasets in Indian Rupees (INR). Freshness metadata is strictly marked as cached.
+      {optimizeResult?.data_source === 'live' ? (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-800 flex items-start gap-2.5 shadow-xs">
+          <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold">Live Data Notice:</span> Prices and delivery fees were fetched in real-time from supported QuickCommerce APIs.
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 text-xs text-gray-700 flex items-start gap-2.5 shadow-xs">
+          <Info className="w-4 h-4 text-gray-500 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold">Live Data Notice:</span> (Demo Mode Active) You are currently viewing static/demo grocery data. Configure QuickCommerce API credentials in the backend to enable live real-time pricing.
+          </div>
+        </div>
+      )}
 
       {/* Main Optimization Area */}
       <div className="bg-white rounded-3xl border border-gray-100 p-6 sm:p-8 shadow-sm space-y-6 relative overflow-hidden">
@@ -136,6 +249,43 @@ export const CartOptimizationPanel: React.FC = () => {
             <span>Optimize Cart</span>
           </button>
         </div>
+
+        {/* Covered by Pantry Section */}
+        {coveredByPantry.length > 0 && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs" data-testid="covered-by-pantry-banner">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Covered by Your Pantry ({coveredByPantry.length}):</span>{' '}
+                <span className="font-medium text-emerald-800">
+                  {coveredByPantry.map((ing) => ing.display_name || ing.canonical_name).join(', ')}
+                </span>
+                <p className="text-[11px] text-emerald-700/80 mt-0.5">
+                  These ingredients are already in your pantry and deducted from your shopping cart.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDeductPantry(!deductPantry)}
+              className="px-3 py-1 bg-white hover:bg-emerald-100/70 border border-emerald-300 text-emerald-800 font-semibold text-[11px] rounded-lg shadow-2xs transition-all shrink-0 cursor-pointer"
+              data-testid="toggle-deduct-pantry"
+            >
+              {deductPantry ? 'Include in cart' : 'Deduct from cart'}
+            </button>
+          </div>
+        )}
+
+        {/* All covered by pantry state */}
+        {itemsToOptimize.length === 0 && coveredByPantry.length > 0 && (
+          <div className="py-8 text-center space-y-3 bg-emerald-50/60 border border-emerald-100 rounded-2xl p-6" data-testid="all-covered-by-pantry">
+            <CheckCircle className="w-10 h-10 text-emerald-600 mx-auto" />
+            <h4 className="text-base font-bold text-emerald-900">All Ingredients Ready in Pantry!</h4>
+            <p className="text-xs text-emerald-700 max-w-md mx-auto">
+              All {ingredientsCount} ingredients for this recipe are already in your pantry. No store shopping needed!
+            </p>
+          </div>
+        )}
 
         {/* Loading overlay for optimization */}
         {isOptimizePending && (
@@ -162,6 +312,21 @@ export const CartOptimizationPanel: React.FC = () => {
         {/* Results display */}
         {optimizeResult && !isOptimizePending && (
           <div className="space-y-6 animate-fadeIn" data-testid="optimization-results">
+            
+            {/* Budget Warning Banner */}
+            {budgetCap && parseFloat(budgetCap) > 0 && optimizeResult.total_cost > parseFloat(budgetCap) && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex gap-3 items-start shadow-sm animate-pulse">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                <div>
+                  <h5 className="text-xs font-bold text-rose-900">Budget Exceeded</h5>
+                  <p className="text-[10px] text-rose-700 mt-0.5 font-medium leading-relaxed">
+                    Your optimized cart (₹{optimizeResult.total_cost.toFixed(2)}) is over your budget limit of ₹{budgetCap}.
+                    Consider swapping the most expensive ingredients or buying smaller quantities.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Recommendation Strategy Header Card */}
             <div className="bg-gradient-to-br from-emerald-50 to-teal-50/50 border border-emerald-100/80 rounded-2xl p-5 sm:p-6 shadow-2xs">
               <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -192,6 +357,19 @@ export const CartOptimizationPanel: React.FC = () => {
                 Total cost: <span className="text-emerald-700">{formatINR(optimizeResult.total_cost)}</span>
               </h4>
 
+              {budgetCap && parseFloat(budgetCap) > 0 && optimizeResult.total_cost > parseFloat(budgetCap) && (
+                <div className="mt-3 mb-1 p-3 bg-rose-50 border border-rose-200 rounded-xl flex gap-3 items-start shadow-sm animate-pulse">
+                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                  <div>
+                    <h5 className="text-xs font-bold text-rose-900">Budget Exceeded</h5>
+                    <p className="text-[10px] text-rose-700 mt-0.5 font-medium leading-relaxed">
+                      Your optimized cart (₹{optimizeResult.total_cost.toFixed(2)}) is over your budget limit of ₹{budgetCap}.
+                      Consider swapping the most expensive ingredients or buying smaller quantities.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {optimizeResult.estimated_savings > 0 && (
                 <p className="text-xs text-emerald-800 font-semibold mt-1.5 flex items-center gap-1" data-testid="estimated-savings">
                   <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -199,63 +377,54 @@ export const CartOptimizationPanel: React.FC = () => {
                 </p>
               )}
 
-              <p className="text-xs text-gray-600 leading-relaxed mt-3 border-t border-emerald-100/60 pt-3 italic">
-                "{optimizeResult.explanation}"
-              </p>
+              <div className="mt-3 border-t border-emerald-100/60 pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <p className="text-xs text-gray-600 leading-relaxed italic flex-1">
+                  "{optimizeResult.explanation}"
+                </p>
+                <a
+                  href="https://www.swiggy.com/instamart"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition-all shrink-0 cursor-pointer"
+                  data-testid="open-swiggy-web-basket"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open Basket on Swiggy Web</span>
+                </a>
+              </div>
             </div>
 
             {/* Store Breakdowns list */}
-            <div className="space-y-4">
-              <h5 className="text-xs font-bold text-gray-400 tracking-wider uppercase">Stores Breakdown</h5>
-              
-              <div className="grid grid-cols-1 gap-6">
-                {optimizeResult.recommended_cart.stores.map((storeBreakdown, idx) => (
-                  <div key={idx} className="border border-gray-100 rounded-2xl overflow-hidden shadow-2xs bg-white">
-                    {/* Store Title Bar */}
-                    <div className="bg-gray-50 border-b border-gray-100 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h6 className="font-extrabold text-sm text-gray-900" data-testid="store-name">
-                          {storeBreakdown.store_name}
-                        </h6>
-                        <p className="text-[10px] text-gray-500 font-medium">
-                          {storeBreakdown.complete ? '✓ Fulfills all required items' : '⚠️ Partial fulfillment'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-black text-gray-900">
-                          {formatINR(storeBreakdown.total)}
-                        </span>
-                        <p className="text-[9px] text-gray-400">
-                          Incl. {formatINR(storeBreakdown.delivery_fee)} delivery
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Products list */}
-                    <div className="p-5 divide-y divide-gray-50">
-                      {storeBreakdown.selected_products.map((selProduct, pIdx) => (
-                        <div key={pIdx} className="py-3 first:pt-0 last:pb-0 flex items-start justify-between gap-4 text-xs">
-                          <div>
-                            <p className="font-bold text-gray-900" data-testid="product-name">
-                              {selProduct.product_name}
-                            </p>
-                            <p className="text-[10px] text-gray-500 mt-0.5">
-                              Fulfills: <span className="font-medium text-gray-700">{selProduct.ingredient_name}</span> • Brand: {selProduct.brand || 'Generic'}
-                            </p>
-                            <p className="text-[10px] text-emerald-700 font-semibold mt-1">
-                              {selProduct.packages_required} × {formatINR(selProduct.package_price)} ({selProduct.package_quantity} {selProduct.package_unit})
-                            </p>
-                          </div>
-                          <span className="font-extrabold text-gray-900 shrink-0">
-                            {formatINR(selProduct.line_cost)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+            {optimizeResult.store_baskets && optimizeResult.store_baskets.length > 0 && (
+              <div className="space-y-4">
+                <h5 className="text-xs font-bold text-gray-400 tracking-wider uppercase">Store Cart Summaries</h5>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {optimizeResult.store_baskets.map((storeBreakdown, idx) => {
+                    const isBest = optimizeResult.recommended_cart.stores.some(s => s.store_name === storeBreakdown.store_name);
+                    
+                    return (
+                      <PriceComparisonCard
+                        key={idx}
+                        store={{ 
+                          id: storeBreakdown.store_id || String(idx), 
+                          name: storeBreakdown.store_name,
+                          is_demo_store: optimizeResult.data_source === 'demo',
+                          store_type: 'Grocery Store',
+                          city: 'Local',
+                          created_at: new Date().toISOString()
+                        }}
+                        itemCost={storeBreakdown.subtotal}
+                        deliveryFee={storeBreakdown.delivery_fee}
+                        isLowestPrice={isBest}
+                        isSelected={isBest}
+                        items={storeBreakdown.selected_products}
+                        isExpandedByDefault={isBest}
+                      />
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Unfulfilled / Missing Ingredients */}
             {optimizeResult.missing_ingredients.length > 0 && (
@@ -298,6 +467,34 @@ export const CartOptimizationPanel: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Start Cooking Section */}
+        {recipeId && (
+          <div
+            className="pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-emerald-50/60 -mx-6 sm:-mx-8 -mb-6 sm:-mb-8 p-6 rounded-b-3xl"
+            data-testid="optimizer-start-cooking-section"
+          >
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <ChefHat className="w-4.5 h-4.5 text-emerald-600" />
+                Ready to cook this recipe?
+              </h4>
+              <p className="text-xs text-gray-600 mt-0.5">
+                Ingredients reviewed. Jump straight to step-by-step guided cooking with timers and tips.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleStartCooking}
+              disabled={startCookingMutation.isPending}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+              data-testid="optimizer-start-cooking-btn"
+            >
+              <ChefHat className="w-4 h-4 text-white" />
+              <span>{activeSession && activeSession.status !== 'completed' ? 'Resume Cooking' : 'Start Cooking'}</span>
+            </button>
           </div>
         )}
       </div>

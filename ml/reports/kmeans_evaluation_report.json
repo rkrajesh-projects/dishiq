@@ -1,0 +1,98 @@
+{
+  "model_name": "DishIQ Phase 17 Unsupervised Recipe Clusterer",
+  "model_version": "1.0.1",
+  "algorithm": "KMeans",
+  "selected_k": 2,
+  "feature_representation": "TF-IDF(ingredients, max 200) + LogScaled(cooking_time, ingredient_count)*0.5",
+  "preprocessing": "StandardScaler for numerics, Log1p for outliers",
+  "training_recipe_count": 2005,
+  "random_seed": 42,
+  "metrics_evaluated": {
+    "2": {
+      "Silhouette": 0.14314470883138242,
+      "Calinski_Harabasz": 361.6011582846323,
+      "Davies_Bouldin": 2.245340674782195
+    },
+    "3": {
+      "Silhouette": 0.12502955906947494,
+      "Calinski_Harabasz": 281.362185895951,
+      "Davies_Bouldin": 2.2924640512048167
+    },
+    "4": {
+      "Silhouette": 0.0893620102932972,
+      "Calinski_Harabasz": 239.82446104071485,
+      "Davies_Bouldin": 2.508390279962952
+    },
+    "5": {
+      "Silhouette": 0.07504590667714546,
+      "Calinski_Harabasz": 199.17427501716344,
+      "Davies_Bouldin": 2.895812725284749
+    },
+    "6": {
+      "Silhouette": 0.07430555722424441,
+      "Calinski_Harabasz": 174.9420712440465,
+      "Davies_Bouldin": 2.801163630695235
+    },
+    "7": {
+      "Silhouette": 0.061301770621524206,
+      "Calinski_Harabasz": 157.58071458292815,
+      "Davies_Bouldin": 2.7968487706042886
+    },
+    "8": {
+      "Silhouette": 0.06666883204950463,
+      "Calinski_Harabasz": 144.68235626237117,
+      "Davies_Bouldin": 2.735908297282486
+    },
+    "9": {
+      "Silhouette": 0.06590086983122666,
+      "Calinski_Harabasz": 132.54418323828318,
+      "Davies_Bouldin": 2.730735824513191
+    },
+    "10": {
+      "Silhouette": 0.05896496146022896,
+      "Calinski_Harabasz": 123.21046966014622,
+      "Davies_Bouldin": 2.805403987857102
+    }
+  },
+  "final_metrics": {
+    "Silhouette": 0.14314470883138242,
+    "Calinski_Harabasz": 361.6011582846323,
+    "Davies_Bouldin": 2.245340674782195
+  },
+  "cluster_summaries": {
+    "0": {
+      "count": 1264,
+      "percentage": 63.04239401496259,
+      "dominant_cuisine": "Unknown",
+      "dominant_diet": "Unknown",
+      "avg_cooking_time": 194.36075949367088,
+      "avg_ingredient_count": 13.182753164556962,
+      "top_ingredients": [
+        "teaspoon",
+        "cup",
+        "chopped",
+        "powder",
+        "seeds"
+      ],
+      "text_description": "Cluster 0\nRecipes: 1264 (63.0%)\nAverage cooking time: 194.4 minutes\nAverage ingredient count: 13.2\nCommon ingredients: teaspoon, cup, chopped, powder, seeds\n\nDescription:\nStatistical recipe group representing recipes with an average cooking time of 194 minutes and approximately 13 ingredients. Common ingredient terms include teaspoon, cup, chopped, powder, seeds."
+    },
+    "1": {
+      "count": 741,
+      "percentage": 36.957605985037404,
+      "dominant_cuisine": "Unknown",
+      "dominant_diet": "Standard",
+      "avg_cooking_time": 30.329284750337383,
+      "avg_ingredient_count": 6.2132253711201075,
+      "top_ingredients": [
+        "butter",
+        "sugar",
+        "black",
+        "pepper",
+        "milk"
+      ],
+      "text_description": "Cluster 1\nRecipes: 741 (37.0%)\nAverage cooking time: 30.3 minutes\nAverage ingredient count: 6.2\nCommon ingredients: butter, sugar, black, pepper, milk\n\nDescription:\nStatistical recipe group representing Standard recipes with an average cooking time of 30 minutes and approximately 6 ingredients. Common ingredient terms include butter, sugar, black, pepper, milk."
+    }
+  },
+  "limitations": "K-Means is unsupervised; no classification accuracy is reported. Numeric outliers heavily skewed early testing, so log transforms were applied. Clusters represent statistical groupings of ingredients.",
+  "model_type": "KMeans"
+}

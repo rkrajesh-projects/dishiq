@@ -1,0 +1,73 @@
+{
+  "dataset": {
+    "version": "Phase 14A Cleaned Combined",
+    "train_size": 1403,
+    "test_size": 301
+  },
+  "retrieval_models": {
+    "TF-IDF_V2": {
+      "metrics": {
+        "HitRate@5": 0.4850498338870432,
+        "HitRate@10": 0.49169435215946844,
+        "MRR@5": 0.42823920265780724,
+        "MRR@10": 0.4292675209618731
+      },
+      "artifact": "recipe_tfidf_v2.joblib"
+    },
+    "SentenceTransformer_V1": {
+      "metrics": {
+        "HitRate@5": 0.5016611295681063,
+        "HitRate@10": 0.5049833887043189,
+        "MRR@5": 0.488482834994463,
+        "MRR@10": 0.4888981173864896
+      },
+      "artifact": "recipe_sentence_transformer_v1.joblib"
+    },
+    "HybridRecommender": {
+      "metrics": {
+        "HitRate@5": 0.5016611295681063,
+        "HitRate@10": 0.5049833887043189,
+        "MRR@5": 0.487264673311185,
+        "MRR@10": 0.4878183831672204
+      },
+      "weights": {
+        "tfidf": 0.3,
+        "semantic": 0.5,
+        "suitability": 0.2
+      },
+      "artifact": "hybrid_recommender (composite)"
+    }
+  },
+  "suitability_model": {
+    "RandomForest_V1": {
+      "target": "Recipe Rating (proxy for quality/suitability)",
+      "metrics": {
+        "MAE": 0.04994147292636963,
+        "RMSE": 0.314533370425361,
+        "R2": 0.23625076467123474
+      },
+      "baseline_metrics": {
+        "RMSE": 0.3608519087846499,
+        "MAE": 0.2350179847171345
+      },
+      "artifact": "random_forest_suitability_v1.joblib"
+    }
+  },
+  "clustering_model": {
+    "KMeans_V1": {
+      "selected_k": 2,
+      "metrics": {
+        "Silhouette": 0.14314470883138242,
+        "Calinski_Harabasz": 361.6011582846323,
+        "Davies_Bouldin": 2.245340674782195
+      },
+      "cluster_sizes": {
+        "0": 1264,
+        "1": 741
+      },
+      "artifact": "recipe_kmeans_v1.joblib"
+    }
+  },
+  "evaluation_protocol": "Proxy-based intrinsic structural evaluation without genuine user logs.",
+  "limitations": "Lack of genuine user click/interaction data limits external validity. Metrics reflect structural data fidelity, not human personalization."
+}

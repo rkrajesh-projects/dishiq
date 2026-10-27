@@ -46,6 +46,8 @@ def search_recipes(
     cuisine: Optional[str] = Query(None, description="Filter by cuisine"),
     dietary_type: Optional[str] = Query(None, description="Filter by dietary restriction"),
     max_time: Optional[int] = Query(None, ge=1, le=1440, description="Maximum prep + cook time in minutes"),
+    min_rating: Optional[float] = Query(None, ge=0, le=5, description="Minimum rating"),
+    sort_by: Optional[str] = Query(None, description="Sort order"),
     ingredient: Optional[str] = Query(None, description="Filter by required ingredient"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(10, ge=1, le=50, description="Items per page"),
@@ -64,11 +66,28 @@ def search_recipes(
         dietary_type=clean_diet,
         max_time=max_time,
         pantry_ingredients=pantry_list,
-        limit=100,
     )
 
     if clean_cuisine:
-        ranked = [item for item in ranked if item["recipe"].cuisine.lower() == clean_cuisine.lower()]
+        if clean_cuisine.lower() == "other":
+            ranked = [item for item in ranked if not item["recipe"].cuisine or item["recipe"].cuisine.lower() in ("unknown", "other")]
+        else:
+            c_target = clean_cuisine.lower()
+            base_target = c_target[:-8].strip() if c_target.endswith(" recipes") else c_target
+            valid_targets = {c_target, base_target, f"{base_target} recipes"}
+            ranked = [item for item in ranked if item["recipe"].cuisine and item["recipe"].cuisine.lower() in valid_targets]
+
+    if min_rating is not None:
+        ranked = [item for item in ranked if item["recipe"].average_rating >= min_rating]
+        
+    if sort_by:
+        if sort_by == 'rating_desc':
+            ranked.sort(key=lambda x: x["recipe"].average_rating, reverse=True)
+        elif sort_by == 'time_asc':
+            ranked.sort(key=lambda x: (x["recipe"].preparation_minutes or 0) + (x["recipe"].cooking_minutes or 0))
+        elif sort_by == 'name_asc':
+            ranked.sort(key=lambda x: x["recipe"].name)
+
 
     total = len(ranked)
     total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -96,7 +115,50 @@ def search_recipes(
     )
 
 
+
+from pydantic import BaseModel
+class RecipeFiltersResponse(BaseModel):
+    cuisines: list[str]
+    dietary_types: list[str]
+
+@router.get("/filters", response_model=RecipeFiltersResponse, summary="Get Available Filters")
+def get_recipe_filters(db: Session = Depends(get_db)):
+    from app.models.recipe import Recipe
+    raw_cuisines = [c[0] for c in db.query(Recipe.cuisine).distinct().all() if c[0]]
+    raw_diets = [d[0] for d in db.query(Recipe.dietary_type).distinct().all() if d[0]]
+    
+    # Normalize cuisines: strip trailing " Recipes" and replace Unknown with Other
+    cuisines_set = set()
+    for c in raw_cuisines:
+        norm = c.strip()
+        if norm.lower().endswith(" recipes"):
+            norm = norm[:-8].strip()
+        if norm.lower() == "unknown":
+            norm = "Other"
+        if norm:
+            cuisines_set.add(norm)
+            
+    clean_cuisines = sorted(list(cuisines_set))
+    if "Other" in clean_cuisines:
+        clean_cuisines.remove("Other")
+        clean_cuisines.append("Other")
+        
+    return {"cuisines": clean_cuisines, "dietary_types": sorted(list(set(raw_diets)))}
+
+@router.get("/by-name", response_model=RecipeRead, summary="Get Exact Recipe By Name")
+
+def get_recipe_by_name(name: str = Query(..., description="Exact recipe name"), db: Session = Depends(get_db)):
+    clean_name = sanitize_input(name)
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Invalid recipe name")
+    service = RecipeService(db)
+    recipe = service.get_recipe_by_exact_name(clean_name)
+    if not recipe:
+        raise HTTPException(status_code=404, detail=f"Recipe with name '{name}' not found")
+    return recipe
+
 @router.get("/{recipe_id}", response_model=RecipeDetailRead, summary="Get Recipe Details")
+
 def get_recipe_by_id(recipe_id: str, db: Session = Depends(get_db)):
     clean_id = sanitize_input(recipe_id)
     if not clean_id:
@@ -105,7 +167,8 @@ def get_recipe_by_id(recipe_id: str, db: Session = Depends(get_db)):
     return service.get_recipe_by_id(clean_id)
 
 
-from app.api.pantry import get_current_user
+from app.api.deps import get_current_user
+from app.models.user import User
 from app.models.pantry import RecipeFeedback
 from app.schemas.feedback import RecipeFeedbackCreate, RecipeFeedbackRead
 
@@ -113,6 +176,7 @@ from app.schemas.feedback import RecipeFeedbackCreate, RecipeFeedbackRead
 def submit_recipe_feedback(
     recipe_id: str,
     body: RecipeFeedbackCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -120,8 +184,6 @@ def submit_recipe_feedback(
     Associates feedback with the current user and verifies recipe exists.
     Prevents duplicate feedback submissions by the same user.
     """
-    user = get_current_user(db)
-    
     clean_recipe_id = sanitize_input(recipe_id)
     if not clean_recipe_id:
         raise HTTPException(status_code=400, detail="Invalid recipe ID")
@@ -133,7 +195,7 @@ def submit_recipe_feedback(
         raise HTTPException(status_code=404, detail="Recipe not found")
         
     # 2. Check for duplicate feedback
-    existing = db.query(RecipeFeedback).filter_by(user_id=user.id, recipe_id=clean_recipe_id).first()
+    existing = db.query(RecipeFeedback).filter_by(user_id=current_user.id, recipe_id=clean_recipe_id).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -142,13 +204,17 @@ def submit_recipe_feedback(
         
     # 3. Create feedback record
     feedback = RecipeFeedback(
-        user_id=user.id,
+        user_id=current_user.id,
         recipe_id=clean_recipe_id,
         rating=body.rating,
         difficulty=body.difficulty,
         notes=body.notes
     )
-    db.add(feedback)
-    db.commit()
-    db.refresh(feedback)
+    try:
+        db.add(feedback)
+        db.commit()
+        db.refresh(feedback)
+    except Exception:
+        db.rollback()
+        raise
     return feedback

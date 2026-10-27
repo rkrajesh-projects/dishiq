@@ -9,6 +9,10 @@ class NormalizedGroceryProduct(BaseModel):
     """
     source_platform: str = Field(..., description="Unique code identifier of the external provider (e.g. 'quickmart')")
     source_product_id: str = Field(..., description="Platform-specific unique ID of the product")
+    store_id: Optional[str] = Field(
+    None,
+    description="Unique ID of the store where the product is sold"
+    )
     store_name: str = Field(..., description="Store display name")
     product_name: str = Field(..., description="Display name of the product")
     brand: Optional[str] = Field("Generic", description="Product brand name")
@@ -16,12 +20,15 @@ class NormalizedGroceryProduct(BaseModel):
     package_quantity: Optional[float] = Field(1.0, description="Package size amount (e.g. 200.0)")
     package_unit: Optional[str] = Field("pack", description="Package size unit (e.g. grams, kg, ml)")
     price: Optional[float] = Field(None, description="Current price in INR (₹)")
+    mrp: Optional[float] = Field(None, description="Maximum Retail Price before discounts (INR)")
+    discount: Optional[float] = Field(None, description="Discount amount or percentage applied")
     currency: str = Field(default="INR", description="Currency code (always INR)")
     availability: bool = Field(default=True, description="Whether the product is currently in stock")
+    location: Optional[str] = Field(None, description="Store location or serviceability region")
     product_url: Optional[str] = Field(None, description="Optional direct URL link to product page")
     retrieved_at: datetime = Field(..., description="Timestamp of when the product details were retrieved")
-    price_freshness: Literal["LIVE", "CACHED", "UNKNOWN"] = Field(
-        default="LIVE", description="Freshness status indicator for the retrieved price"
+    price_freshness: Literal["PROVIDER_LIVE", "CACHED", "DEMO", "UNKNOWN"] = Field(
+        default="UNKNOWN", description="Freshness status indicator for the retrieved price"
     )
 
     @model_validator(mode="before")

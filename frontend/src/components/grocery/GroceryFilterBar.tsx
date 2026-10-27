@@ -8,6 +8,7 @@ export interface GroceryFilterBarProps {
   sortOption: SortOption;
   onSelectSort: (sort: SortOption) => void;
   availableStores: string[];
+  hasComparableUnitPrices?: boolean;
   totalCount: number;
   filteredCount: number;
   className?: string;
@@ -19,6 +20,7 @@ export const GroceryFilterBar: React.FC<GroceryFilterBarProps> = ({
   sortOption,
   onSelectSort,
   availableStores,
+  hasComparableUnitPrices = false,
   totalCount,
   filteredCount,
   className = '',
@@ -66,8 +68,11 @@ export const GroceryFilterBar: React.FC<GroceryFilterBarProps> = ({
             className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer"
           >
             <option value="default">Default Order</option>
-            <option value="price_asc">Price: Low to High</option>
-            <option value="price_desc">Price: High to Low</option>
+            <option value="price_asc">Total Price: Low to High</option>
+            <option value="price_desc">Total Price: High to Low</option>
+            <option value="unit_price_asc" disabled={!hasComparableUnitPrices}>
+              Unit Price: Low to High {!hasComparableUnitPrices ? '(Unavailable)' : ''}
+            </option>
             <option value="similarity_desc">Similarity: High to Low</option>
             <option value="similarity_asc">Similarity: Low to High</option>
           </select>

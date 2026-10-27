@@ -82,9 +82,13 @@ def train_recommender():
 
     metadata = {
         "model_name": "DishIQ Recipe TF-IDF Recommender",
-        "model_version": "1.0.0",
+        "model_version": "1.1.0",
         "algorithm": "TF-IDF + Cosine Similarity",
+        "algorithm_type": "Classical NLP / Information Retrieval (NOT a neural network)",
         "feature_count": int(tfidf_matrix.shape[1]),
+        "ngram_range": [1, 2],
+        "stop_words": "english",
+        "max_features": 500,
         "dataset_version": "1.0.0",
         "training_timestamp": datetime.now(timezone.utc).isoformat(),
         "sklearn_version": sklearn.__version__,
@@ -97,8 +101,14 @@ def train_recommender():
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
+    # Companion metadata for TFIDFRecommender model class
+    companion_path = os.path.join(artifacts_dir, "recipe_tfidf_metadata.json")
+    with open(companion_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+
     print(f"Model successfully saved to {joblib_path}")
-    print(f"Enhanced metadata saved to {metadata_path}")
+    print(f"Metadata saved to {metadata_path}")
+    print(f"Total recipes: {len(recipes)} | Features: {tfidf_matrix.shape[1]}")
 
 
 if __name__ == "__main__":

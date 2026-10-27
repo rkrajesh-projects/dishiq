@@ -145,6 +145,39 @@ class TestPackageCalculation:
         """0.5 kg required, 200g package → ceil(500/200) = 3 packages."""
         assert calculate_packages_required(0.5, "kg", 200, "g") == 3
 
+    def test_piece_to_gram_heuristic_tomato(self):
+        """2 pieces of tomato (~200g) in a 500g package → 1 package."""
+        assert calculate_packages_required(2.0, "pieces", 500.0, "g", ingredient_name="tomato") == 1
+
+    def test_piece_to_gram_heuristic_multiple_packs(self):
+        """8 pieces of tomato (~800g) in a 500g package → 2 packages."""
+        assert calculate_packages_required(8.0, "pieces", 500.0, "g", ingredient_name="tomato") == 2
+
+    def test_volume_to_gram_heuristic_cumin(self):
+        """1 tsp of cumin seeds (~3.2g) in a 100g package → 1 package."""
+        assert calculate_packages_required(1.0, "teaspoon", 100.0, "g", ingredient_name="cumin seeds") == 1
+
+    def test_bunch_to_gram_heuristic_coriander(self):
+        """1 bunch of coriander (~100g) in a 100g package → 1 package."""
+        assert calculate_packages_required(1.0, "bunch", 100.0, "g", ingredient_name="coriander") == 1
+
+    def test_piece_to_gram_heuristic_green_chili(self):
+        """2 pieces of green chili (~10g) in a 100g package → 1 package."""
+        assert calculate_packages_required(2.0, "pieces", 100.0, "g", ingredient_name="green chili") == 1
+
+    def test_garlic_cloves_to_gram_heuristic(self):
+        """4 cloves of garlic (~16g) in a 100g package → 1 package."""
+        assert calculate_packages_required(4.0, "clove", 100.0, "g", ingredient_name="garlic") == 1
+
+    def test_gram_to_piece_reverse_heuristic(self):
+        """300g of tomato (3 pieces @ 100g) with 1-piece product → 3 packages."""
+        assert calculate_packages_required(300.0, "g", 1.0, "piece", ingredient_name="tomato") == 3
+
+    def test_incompatible_without_ingredient_name_returns_none(self):
+        """Without ingredient_name, cross-dimension cannot guess density/weight and returns None."""
+        assert calculate_packages_required(2.0, "pieces", 500.0, "g") is None
+        assert calculate_packages_required(1.0, "teaspoon", 100.0, "g") is None
+
 
 # ===================================================================
 # 2. LINE COST TESTS

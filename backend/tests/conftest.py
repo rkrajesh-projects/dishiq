@@ -22,6 +22,15 @@ SQLALCHEMY_DATABASE_URL = "sqlite:///./test_dishiq.db"
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
+
+from sqlalchemy import event
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -38,6 +47,21 @@ def seeded_db():
 
 @pytest.fixture(scope="module")
 def client(seeded_db):
+    from app.models.user import User
+    from app.api.deps import get_current_user
+    from app.core.security import get_password_hash
+
+    user = seeded_db.query(User).first()
+    if not user:
+        user = User(
+            email="test_user@example.com",
+            hashed_password=get_password_hash("testpassword"),
+            full_name="Test User",
+        )
+        seeded_db.add(user)
+        seeded_db.commit()
+        seeded_db.refresh(user)
+
     def override_get_db():
         try:
             yield seeded_db
@@ -45,6 +69,7 @@ def client(seeded_db):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: user
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

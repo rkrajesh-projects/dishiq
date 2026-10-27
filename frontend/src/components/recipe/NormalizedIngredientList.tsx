@@ -26,14 +26,34 @@ export interface NormalizedIngredientListProps {
   recipeId: string;
   /** Optional set of pantry ingredient canonical names for "In Pantry" highlighting */
   pantryIngredients?: Set<string>;
+  scaleFactor?: number;
 }
 
 export const NormalizedIngredientList: React.FC<NormalizedIngredientListProps> = ({
   recipeId,
   pantryIngredients,
+  scaleFactor = 1,
 }) => {
   const [quickMatchIngredient, setQuickMatchIngredient] = useState<string | null>(null);
   const [selectedIngredients, setSelectedIngredients] = useState<Set<string>>(new Set());
+
+  const isPantryItem = React.useCallback(
+    (ingredient: ParsedIngredient): boolean => {
+      if (!pantryIngredients || pantryIngredients.size === 0) return false;
+      const can = (ingredient.canonical_name || '').toLowerCase().trim();
+      const disp = (ingredient.display_name || '').toLowerCase().trim();
+      if (pantryIngredients.has(can) || pantryIngredients.has(disp)) return true;
+      if (pantryIngredients.has(ingredient.canonical_name)) return true;
+      for (const p of pantryIngredients) {
+        const pl = p.toLowerCase().trim();
+        if (!pl) continue;
+        if (pl === can || pl === disp) return true;
+        if (can && (can.includes(pl) || pl.includes(can))) return true;
+      }
+      return false;
+    },
+    [pantryIngredients]
+  );
 
   // Sync with pantryIngredients if it changes
   React.useEffect(() => {
@@ -66,6 +86,12 @@ export const NormalizedIngredientList: React.FC<NormalizedIngredientListProps> =
     staleTime: 5 * 60 * 1000,   // 5 minutes — ingredients don't change often
   });
 
+  const ingredients: ParsedIngredient[] = React.useMemo(() => data?.results ?? [], [data?.results]);
+
+  const pantryCount = React.useMemo(() => {
+    return ingredients.filter((ing) => isPantryItem(ing)).length;
+  }, [ingredients, isPantryItem]);
+
   // ── Loading ────────────────────────────────────────────────────────────
   if (isLoading) {
     return <LoadingState message="Analysing ingredients…" />;
@@ -85,8 +111,6 @@ export const NormalizedIngredientList: React.FC<NormalizedIngredientListProps> =
     );
   }
 
-  const ingredients: ParsedIngredient[] = data?.results ?? [];
-
   // ── Empty ──────────────────────────────────────────────────────────────
   if (ingredients.length === 0) {
     return (
@@ -103,21 +127,35 @@ export const NormalizedIngredientList: React.FC<NormalizedIngredientListProps> =
       <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center justify-between">
         <span>Ingredients</span>
         <span className="text-xs font-normal text-gray-500">
+          {scaleFactor && scaleFactor !== 1 && (
+            <span className="text-emerald-600 font-semibold mr-1.5" data-testid="scaled-indicator">
+              Scaled ({scaleFactor}x) •
+            </span>
+          )}
           {ingredients.length} {ingredients.length === 1 ? 'item' : 'items'}
+          {pantryCount > 0 && (
+            <span className="text-emerald-700 font-semibold ml-1.5" data-testid="pantry-count-indicator">
+              • {pantryCount} in pantry
+            </span>
+          )}
         </span>
       </h3>
 
       <ul className="divide-y divide-gray-50" aria-label="Ingredient list">
-        {ingredients.map((ingredient, idx) => (
-          <IngredientRow
-            key={`${ingredient.raw_text}-${idx}`}
-            ingredient={ingredient}
-            inPantry={pantryIngredients?.has(ingredient.canonical_name) ?? false}
-            isSelected={selectedIngredients.has(ingredient.canonical_name)}
-            onToggle={() => handleToggleIngredient(ingredient.canonical_name)}
-            onQuickMatch={(ingredientName) => setQuickMatchIngredient(ingredientName)}
-          />
-        ))}
+        {ingredients.map((ingredient, idx) => {
+          const inPantry = isPantryItem(ingredient);
+          return (
+            <IngredientRow
+              key={`${ingredient.raw_text}-${idx}`}
+              ingredient={ingredient}
+              inPantry={inPantry}
+              isSelected={selectedIngredients.has(ingredient.canonical_name) || inPantry}
+              onToggle={() => handleToggleIngredient(ingredient.canonical_name)}
+              onQuickMatch={(ingredientName) => setQuickMatchIngredient(ingredientName)}
+              scaleFactor={scaleFactor}
+            />
+          );
+        })}
       </ul>
 
       {/* Category legend */}
